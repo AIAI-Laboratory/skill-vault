@@ -26,6 +26,7 @@ Skill Vault is a Manifest V3 Chrome Extension that bridges the gap between your 
 ## 🚀 Quick Start & Installation
 
 ### 1. Build the Extension
+
 ```bash
 # Install dependencies
 npm install
@@ -41,6 +42,7 @@ npm run build
 ```
 
 ### 2. Load into Chrome / Edge / Brave
+
 1. Open your browser and navigate to `chrome://extensions` (or `edge://extensions`).
 2. Toggle **Developer mode** in the top right corner.
 3. Click **Load unpacked**.
@@ -52,12 +54,14 @@ npm run build
 ## 💻 How to Use
 
 ### 1. Managing Skills (Side Panel)
+
 - Click the **Skill Vault** extension icon in your toolbar to open the Chrome Side Panel.
 - Browse curated seed skills (**Code Review**, **Explain Simply**, **Professional Rewrite**, **Bug Investigator**).
 - Click **+ New Skill** to create your own skills with custom shortcuts (e.g., `review`, `explain`, `debug`).
 - Use variables like `{{selected_text}}`, `{{current_date}}`, `{{page_title}}`, `{{page_url}}`.
 
 ### 2. Triggering `/skill` in AI Chats
+
 1. Navigate to [ChatGPT](https://chatgpt.com), [Claude](https://claude.ai), or [Gemini](https://gemini.google.com).
 2. Click into the message prompt box.
 3. Type:
@@ -71,6 +75,7 @@ npm run build
 4. Use <kbd>↑</kbd> and <kbd>↓</kbd> to navigate, and press <kbd>Enter</kbd> to insert the skill prompt directly into the composer.
 
 ### 3. Save Text from Any Webpage
+
 1. Highlight text on any page (e.g. an interesting article, prompt, or code snippet).
 2. Right-click and choose **"Save selection as Skill"**.
 3. The Side Panel will open with a draft prompt ready to name and save!

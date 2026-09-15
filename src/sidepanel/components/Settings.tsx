@@ -36,16 +36,29 @@ export const Settings: React.FC<SettingsProps> = ({
         <div className="section-title">
           <Sparkles size={16} color="#FF453A" /> Vault Statistics
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, textAlign: 'center' }}>
-          <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 6px', borderRadius: 8 }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr 1fr',
+            gap: 8,
+            textAlign: 'center',
+          }}
+        >
+          <div
+            style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 6px', borderRadius: 8 }}
+          >
             <div style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF' }}>{skills.length}</div>
             <div style={{ fontSize: 11, color: '#9CA3AF' }}>Total Skills</div>
           </div>
-          <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 6px', borderRadius: 8 }}>
+          <div
+            style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 6px', borderRadius: 8 }}
+          >
             <div style={{ fontSize: 18, fontWeight: 700, color: '#FBBF24' }}>{totalFavorites}</div>
             <div style={{ fontSize: 11, color: '#9CA3AF' }}>Favorites</div>
           </div>
-          <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 6px', borderRadius: 8 }}>
+          <div
+            style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 6px', borderRadius: 8 }}
+          >
             <div style={{ fontSize: 18, fontWeight: 700, color: '#10B981' }}>{totalUsages}</div>
             <div style={{ fontSize: 11, color: '#9CA3AF' }}>Injections</div>
           </div>
@@ -148,12 +161,16 @@ export const Settings: React.FC<SettingsProps> = ({
       </div>
 
       {/* Privacy Guarantee */}
-      <div className="settings-section" style={{ background: 'rgba(16, 185, 129, 0.05)', borderColor: 'rgba(16, 185, 129, 0.2)' }}>
+      <div
+        className="settings-section"
+        style={{ background: 'rgba(16, 185, 129, 0.05)', borderColor: 'rgba(16, 185, 129, 0.2)' }}
+      >
         <div className="section-title" style={{ color: '#34D399' }}>
           <ShieldCheck size={16} /> Local-First & Zero Analytics
         </div>
         <p style={{ fontSize: 11.5, color: '#9CA3AF', lineHeight: 1.4 }}>
-          Your prompts and conversations never leave your device. Skill Vault operates 100% locally via Chrome storage without remote tracking, cloud accounts, or third-party telemetry.
+          Your prompts and conversations never leave your device. Skill Vault operates 100% locally
+          via Chrome storage without remote tracking, cloud accounts, or third-party telemetry.
         </p>
       </div>
     </div>

@@ -1,5 +1,12 @@
 import { PageContext } from '../domain/types';
-import { AIAdapter, ComposerHandle, CaretContext, TextRange, ComposerChangeCallback, DisposeFunction } from './types';
+import {
+  AIAdapter,
+  ComposerHandle,
+  CaretContext,
+  TextRange,
+  ComposerChangeCallback,
+  DisposeFunction,
+} from './types';
 
 export class GenericAdapter implements AIAdapter {
   readonly id = 'generic';
@@ -14,7 +21,10 @@ export class GenericAdapter implements AIAdapter {
   findComposer(): ComposerHandle | null {
     // Check currently focused element
     const active = document.activeElement as HTMLElement;
-    if (active && (active.tagName === 'TEXTAREA' || active.getAttribute('contenteditable') === 'true')) {
+    if (
+      active &&
+      (active.tagName === 'TEXTAREA' || active.getAttribute('contenteditable') === 'true')
+    ) {
       return {
         element: active,
         kind: active.tagName === 'TEXTAREA' ? 'textarea' : 'contenteditable',

@@ -30,4 +30,3 @@ setupMessageRouter();
 
 // Ensure context menu item is registered
 initContextMenu();
-

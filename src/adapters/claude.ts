@@ -1,5 +1,12 @@
 import { PageContext } from '../domain/types';
-import { AIAdapter, ComposerHandle, CaretContext, TextRange, ComposerChangeCallback, DisposeFunction } from './types';
+import {
+  AIAdapter,
+  ComposerHandle,
+  CaretContext,
+  TextRange,
+  ComposerChangeCallback,
+  DisposeFunction,
+} from './types';
 
 export class ClaudeAdapter implements AIAdapter {
   readonly id = 'claude';
@@ -16,7 +23,9 @@ export class ClaudeAdapter implements AIAdapter {
   findComposer(): ComposerHandle | null {
     const el =
       (document.querySelector('div.ProseMirror[contenteditable="true"]') as HTMLElement) ||
-      (document.querySelector('div[contenteditable="true"][aria-label*="Claude"]') as HTMLElement) ||
+      (document.querySelector(
+        'div[contenteditable="true"][aria-label*="Claude"]'
+      ) as HTMLElement) ||
       (document.querySelector('fieldset div[contenteditable="true"]') as HTMLElement) ||
       (document.querySelector('div[contenteditable="true"]') as HTMLElement);
 

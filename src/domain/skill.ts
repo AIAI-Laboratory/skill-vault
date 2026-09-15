@@ -2,13 +2,7 @@ import { Skill, CreateSkillInput } from './types';
 
 export const CURRENT_SCHEMA_VERSION = 1;
 
-export const RESERVED_SHORTCUTS = new Set([
-  'skill',
-  'skills',
-  'help',
-  'settings',
-  'vault',
-]);
+export const RESERVED_SHORTCUTS = new Set(['skill', 'skills', 'help', 'settings', 'vault']);
 
 const SHORTCUT_REGEX = /^[a-z0-9][a-z0-9-]{0,31}$/;
 
@@ -30,7 +24,8 @@ export function isValidShortcut(shortcut?: string): { valid: boolean; error?: st
   if (!SHORTCUT_REGEX.test(normalized)) {
     return {
       valid: false,
-      error: 'Shortcut must be 1-32 chars, lowercase letters, numbers, or hyphens, starting with a letter/number',
+      error:
+        'Shortcut must be 1-32 chars, lowercase letters, numbers, or hyphens, starting with a letter/number',
     };
   }
 
@@ -42,14 +37,18 @@ export function isValidShortcut(shortcut?: string): { valid: boolean; error?: st
  */
 export function generateSkillId(): string {
   const timestamp = Date.now().toString(36);
-  const randomPart = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 6);
+  const randomPart =
+    Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 6);
   return `sk_${timestamp}${randomPart}`.toLowerCase();
 }
 
 /**
  * Validates input for creating or updating a skill.
  */
-export function validateSkill(input: Partial<CreateSkillInput>): { valid: boolean; errors: string[] } {
+export function validateSkill(input: Partial<CreateSkillInput>): {
+  valid: boolean;
+  errors: string[];
+} {
   const errors: string[] = [];
 
   if (!input.name || input.name.trim() === '') {

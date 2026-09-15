@@ -75,12 +75,18 @@ describe('context-menu', () => {
 
     // 2. storage.local.set called with draft data
     expect(mockStorageLocal.set).toHaveBeenCalledWith({
-      'draft:skill': {
-        content: 'const a = 123;',
+      'draft:skill': expect.objectContaining({
+        rawContent: '  const a = 123;  ',
+        detectedFormat: 'code',
+        formatLabel: 'TypeScript Code',
+        suggestedName: 'TypeScript Code Review',
+        suggestedShortcut: 'ts-review',
+        suggestedTags: expect.arrayContaining(['coding', 'typescript', 'review']),
         url: 'https://example.com/test',
         title: 'Example Page',
         timestamp: expect.any(Number),
-      },
+        content: expect.stringContaining('{{selected_text}}'),
+      }),
     });
   });
 
@@ -97,12 +103,17 @@ describe('context-menu', () => {
 
     expect(mockSidePanel.open).toHaveBeenCalledWith({ tabId: 42 });
     expect(mockStorageLocal.set).toHaveBeenCalledWith({
-      'draft:skill': {
-        content: 'hello world',
+      'draft:skill': expect.objectContaining({
+        rawContent: 'hello world',
+        detectedFormat: 'text',
+        formatLabel: 'Text / Article Content',
+        suggestedName: 'Summarize & Key Takeaways',
+        suggestedShortcut: 'summarize',
         url: '',
         title: '',
         timestamp: expect.any(Number),
-      },
+        content: expect.stringContaining('{{selected_text}}'),
+      }),
     });
   });
 

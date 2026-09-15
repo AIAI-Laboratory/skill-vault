@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Plus, BookOpen, Star, Settings as SettingsIcon, AlertCircle } from 'lucide-react';
 import { Skill, CreateSkillInput, SkillVaultSettings, DEFAULT_SETTINGS } from '../domain/types';
+import { DraftSkill } from '../domain/template-detector';
 import { sendExtensionMessage } from '../infrastructure/messaging/client';
 import { SearchBar } from './components/SearchBar';
 import { SkillList } from './components/SkillList';
@@ -21,7 +22,7 @@ export const App: React.FC = () => {
   const [editingSkill, setEditingSkill] = useState<Skill | null>(null);
 
   // Draft text from right-click context menu
-  const [draftSkill, setDraftSkill] = useState<{ content: string; url?: string; title?: string; timestamp?: number } | null>(null);
+  const [draftSkill, setDraftSkill] = useState<DraftSkill | null>(null);
 
   // Toast notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -55,7 +56,7 @@ export const App: React.FC = () => {
       if (draft && draft.content) {
         setDraftSkill(draft);
         // Automatically open the editor if the draft was created recently (< 15 mins ago)
-        const isRecent = !draft.timestamp || (Date.now() - draft.timestamp < 15 * 60 * 1000);
+        const isRecent = !draft.timestamp || Date.now() - draft.timestamp < 15 * 60 * 1000;
         if (isRecent) {
           setEditingSkill(null);
           setIsEditing(true);
@@ -283,14 +284,23 @@ export const App: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <AlertCircle size={16} color="#FF453A" />
               <span className="draft-alert-text">
-                Text saved from page! Ready to create skill.
+                Selection saved: <strong>{draftSkill.formatLabel || 'Content'}</strong>. Ready to
+                create skill!
               </span>
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
-              <button className="btn-primary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={handleUseDraft}>
+              <button
+                className="btn-primary"
+                style={{ padding: '4px 8px', fontSize: 11 }}
+                onClick={handleUseDraft}
+              >
                 Create
               </button>
-              <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={handleDismissDraft}>
+              <button
+                className="btn-secondary"
+                style={{ padding: '4px 8px', fontSize: 11 }}
+                onClick={handleDismissDraft}
+              >
                 Dismiss
               </button>
             </div>
@@ -299,10 +309,16 @@ export const App: React.FC = () => {
 
         {isEditing ? (
           <SkillEditor
-            key={editingSkill?.id || (draftSkill ? `draft-${draftSkill.timestamp || draftSkill.content}` : 'new')}
+            key={
+              editingSkill?.id ||
+              (draftSkill ? `draft-${draftSkill.timestamp || draftSkill.content}` : 'new')
+            }
             initialSkill={editingSkill}
             initialDraftContent={!editingSkill ? draftSkill?.content : undefined}
-            draftMeta={!editingSkill && draftSkill ? { title: draftSkill.title, url: draftSkill.url } : null}
+            draftSkill={!editingSkill ? draftSkill : null}
+            draftMeta={
+              !editingSkill && draftSkill ? { title: draftSkill.title, url: draftSkill.url } : null
+            }
             onSave={async (data, id) => {
               await handleSaveSkill(data, id);
               if (draftSkill) {

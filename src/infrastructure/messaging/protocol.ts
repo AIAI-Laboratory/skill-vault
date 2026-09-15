@@ -5,6 +5,7 @@ import {
   SkillSearchResult,
   SkillVaultSettings,
 } from '../../domain/types';
+import type { DraftSkill } from '../../domain/template-detector';
 
 export type MessageType =
   | 'SKILL_SEARCH'
@@ -60,7 +61,7 @@ export interface MessageResponseMap {
   SKILL_RECORD_USAGE: boolean;
   SETTINGS_GET: SkillVaultSettings;
   SETTINGS_UPDATE: SkillVaultSettings;
-  GET_DRAFT_SKILL: { content: string; url?: string; title?: string; timestamp?: number } | null;
+  GET_DRAFT_SKILL: DraftSkill | null;
   CLEAR_DRAFT_SKILL: boolean;
   OPEN_SIDE_PANEL: boolean;
 }

@@ -35,7 +35,10 @@ export interface Skill {
   usage: SkillUsage;
 }
 
-export type CreateSkillInput = Omit<Skill, 'id' | 'schemaVersion' | 'createdAt' | 'updatedAt' | 'usage'> & {
+export type CreateSkillInput = Omit<
+  Skill,
+  'id' | 'schemaVersion' | 'createdAt' | 'updatedAt' | 'usage'
+> & {
   id?: string;
 };
 

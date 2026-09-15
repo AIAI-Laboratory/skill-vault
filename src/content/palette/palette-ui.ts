@@ -143,9 +143,11 @@ export class PaletteUI {
   private render(query: string) {
     if (!this.container) return;
 
-    const searchLabel = query ? `Filtering: <strong>"${this.escapeHtml(query)}"</strong>` : 'Type skill name or shortcut';
+    const searchLabel = query
+      ? `Filtering: <strong>"${this.escapeHtml(query)}"</strong>`
+      : 'Type skill name or shortcut';
 
-    let listHtml = '';
+    let listHtml: string;
     if (this.results.length === 0) {
       listHtml = `
         <div class="sv-empty">
@@ -157,7 +159,9 @@ export class PaletteUI {
       listHtml = this.results
         .map(({ skill }, idx) => {
           const isSelected = idx === this.selectedIndex;
-          const shortcutBadge = skill.shortcut ? `<span class="sv-shortcut-badge">/${this.escapeHtml(skill.shortcut)}</span>` : '';
+          const shortcutBadge = skill.shortcut
+            ? `<span class="sv-shortcut-badge">/${this.escapeHtml(skill.shortcut)}</span>`
+            : '';
           const favBadge = skill.favorite ? `<span class="sv-fav-star">★</span>` : '';
           const tagsHtml = (skill.tags || [])
             .slice(0, 3)

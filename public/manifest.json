@@ -4,12 +4,7 @@
   "version": "0.1.0",
   "description": "Universal local-first skill and prompt layer for AI chat on the web",
   "minimum_chrome_version": "116",
-  "permissions": [
-    "storage",
-    "contextMenus",
-    "sidePanel",
-    "activeTab"
-  ],
+  "permissions": ["storage", "contextMenus", "sidePanel", "activeTab"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -34,11 +29,7 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "https://chatgpt.com/*",
-        "https://claude.ai/*",
-        "https://gemini.google.com/*"
-      ],
+      "matches": ["https://chatgpt.com/*", "https://claude.ai/*", "https://gemini.google.com/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
     }

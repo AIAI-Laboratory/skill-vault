@@ -87,7 +87,7 @@ export class SkillRepository {
       // Seed initial skills
       const itemsToSet: Record<string, any> = {
         'meta:schemaVersion': CURRENT_SCHEMA_VERSION,
-        'settings': DEFAULT_SETTINGS,
+        settings: DEFAULT_SETTINGS,
       };
       const index: string[] = [];
 

@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Save, X, Star } from 'lucide-react';
+import { Save, X, Star, Wand2 } from 'lucide-react';
 import { Skill, CreateSkillInput } from '../../domain/types';
 import { isValidShortcut } from '../../domain/skill';
+import { DraftSkill, TemplateOption, processAndDetect } from '../../domain/template-detector';
 
 interface SkillEditorProps {
   initialSkill?: Skill | null;
   initialDraftContent?: string;
+  draftSkill?: DraftSkill | null;
   draftMeta?: { url?: string; title?: string } | null;
   onSave: (skillData: CreateSkillInput, id?: string) => Promise<void>;
   onCancel: () => void;
@@ -14,23 +16,70 @@ interface SkillEditorProps {
 export const SkillEditor: React.FC<SkillEditorProps> = ({
   initialSkill,
   initialDraftContent,
+  draftSkill,
   draftMeta,
   onSave,
   onCancel,
 }) => {
-  const [name, setName] = useState(initialSkill?.name || '');
-  const [shortcut, setShortcut] = useState(initialSkill?.shortcut || '');
-  const [description, setDescription] = useState(initialSkill?.description || '');
-  const [content, setContent] = useState(initialSkill?.content || initialDraftContent || '');
-  const [tagsStr, setTagsStr] = useState((initialSkill?.tags || []).join(', '));
+  const [name, setName] = useState(initialSkill?.name || draftSkill?.suggestedName || '');
+  const [shortcut, setShortcut] = useState(
+    initialSkill?.shortcut || draftSkill?.suggestedShortcut || ''
+  );
+  const [description, setDescription] = useState(
+    initialSkill?.description || draftSkill?.suggestedDescription || ''
+  );
+  const [content, setContent] = useState(
+    initialSkill?.content || draftSkill?.content || initialDraftContent || ''
+  );
+  const [tagsStr, setTagsStr] = useState(
+    (initialSkill?.tags || draftSkill?.suggestedTags || []).join(', ')
+  );
   const [favorite, setFavorite] = useState(initialSkill?.favorite || false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Active detected template state
+  const [activeFormatInfo, setActiveFormatInfo] = useState<{
+    format?: string;
+    formatLabel?: string;
+    templateOptions?: TemplateOption[];
+    selectedTemplateId?: string;
+  }>({
+    format: draftSkill?.detectedFormat,
+    formatLabel: draftSkill?.formatLabel,
+    templateOptions: draftSkill?.templateOptions,
+    selectedTemplateId: draftSkill?.activeTemplateId || draftSkill?.templateOptions?.[0]?.id,
+  });
 
   const shortcutCheck = isValidShortcut(shortcut);
 
   const handleInsertVariable = (varName: string) => {
     setContent((prev) => `${prev}{{${varName}}}`);
+  };
+
+  const handleSelectTemplate = (tpl: TemplateOption) => {
+    setActiveFormatInfo((prev) => ({ ...prev, selectedTemplateId: tpl.id }));
+    setName(tpl.name);
+    setShortcut(tpl.shortcut);
+    setDescription(tpl.description);
+    setContent(tpl.content);
+    setTagsStr(tpl.tags.join(', '));
+  };
+
+  const handleAutoDetectFromContent = () => {
+    if (!content.trim()) return;
+    const result = processAndDetect(content);
+    setActiveFormatInfo({
+      format: result.formatInfo.format,
+      formatLabel: result.formatInfo.formatLabel,
+      templateOptions: result.templates,
+      selectedTemplateId: result.primaryTemplate.id,
+    });
+    setName(result.primaryTemplate.name);
+    setShortcut(result.primaryTemplate.shortcut);
+    setDescription(result.primaryTemplate.description);
+    setContent(result.primaryTemplate.content);
+    setTagsStr(result.primaryTemplate.tags.join(', '));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -89,6 +138,38 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
         </button>
       </div>
 
+      {/* Auto-detected Format & Template Presets */}
+      {activeFormatInfo.formatLabel && (
+        <div className="format-detection-banner">
+          <div className="format-badge-row">
+            <span className="format-badge">✨ {activeFormatInfo.formatLabel}</span>
+            <span className="format-subtext">Pre-processed & template auto-filled</span>
+          </div>
+
+          {activeFormatInfo.templateOptions && activeFormatInfo.templateOptions.length > 1 && (
+            <div className="template-options-row">
+              <span className="template-options-label">Templates:</span>
+              <div className="template-chips">
+                {activeFormatInfo.templateOptions.map((tpl) => {
+                  const isActive = activeFormatInfo.selectedTemplateId === tpl.id;
+                  return (
+                    <button
+                      key={tpl.id}
+                      type="button"
+                      className={`template-chip ${isActive ? 'active' : ''}`}
+                      onClick={() => handleSelectTemplate(tpl)}
+                      title={tpl.description}
+                    >
+                      {isActive ? `★ ${tpl.label}` : tpl.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {draftMeta && (
         <div
           style={{
@@ -104,7 +185,8 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
           }}
         >
           <span>
-            Draft text imported from: <strong>{draftMeta.title || draftMeta.url || 'Webpage selection'}</strong>
+            Draft text imported from:{' '}
+            <strong>{draftMeta.title || draftMeta.url || 'Webpage selection'}</strong>
           </span>
         </div>
       )}
@@ -139,7 +221,9 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
         <div className="form-hint">
           {shortcut ? (
             shortcutCheck.valid ? (
-              <span style={{ color: '#10B981' }}>Trigger in AI with: <code>/{shortcut}</code></span>
+              <span style={{ color: '#10B981' }}>
+                Trigger in AI with: <code>/{shortcut}</code>
+              </span>
             ) : (
               <span style={{ color: '#EF4444' }}>{shortcutCheck.error}</span>
             )
@@ -161,9 +245,19 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
       </div>
 
       <div className="form-group">
-        <label className="form-label">
-          Prompt Content <span className="req">*</span>
-        </label>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <label className="form-label" style={{ margin: 0 }}>
+            Prompt Content <span className="req">*</span>
+          </label>
+          <button
+            type="button"
+            className="btn-detect-template"
+            onClick={handleAutoDetectFromContent}
+            title="Analyze prompt content, detect format, and apply matching template"
+          >
+            <Wand2 size={12} /> Auto-Detect Template
+          </button>
+        </div>
         <textarea
           className="form-textarea"
           placeholder="Enter prompt instructions... Use {{selected_text}} to automatically inject highlighted text."
@@ -178,28 +272,28 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
             className="var-chip-btn"
             onClick={() => handleInsertVariable('selected_text')}
           >
-            + {"{{selected_text}}"}
+            + {'{{selected_text}}'}
           </button>
           <button
             type="button"
             className="var-chip-btn"
             onClick={() => handleInsertVariable('current_date')}
           >
-            + {"{{current_date}}"}
+            + {'{{current_date}}'}
           </button>
           <button
             type="button"
             className="var-chip-btn"
             onClick={() => handleInsertVariable('page_title')}
           >
-            + {"{{page_title}}"}
+            + {'{{page_title}}'}
           </button>
           <button
             type="button"
             className="var-chip-btn"
             onClick={() => handleInsertVariable('page_url')}
           >
-            + {"{{page_url}}"}
+            + {'{{page_url}}'}
           </button>
         </div>
       </div>
@@ -225,9 +319,20 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
         />
         <label
           htmlFor="fav-check"
-          style={{ fontSize: 13, color: '#D1D5DB', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+          style={{
+            fontSize: 13,
+            color: '#D1D5DB',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+          }}
         >
-          <Star size={14} fill={favorite ? '#FBBF24' : 'none'} color={favorite ? '#FBBF24' : '#9CA3AF'} />
+          <Star
+            size={14}
+            fill={favorite ? '#FBBF24' : 'none'}
+            color={favorite ? '#FBBF24' : '#9CA3AF'}
+          />
           Add to Favorites
         </label>
       </div>

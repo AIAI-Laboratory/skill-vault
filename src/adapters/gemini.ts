@@ -1,5 +1,12 @@
 import { PageContext } from '../domain/types';
-import { AIAdapter, ComposerHandle, CaretContext, TextRange, ComposerChangeCallback, DisposeFunction } from './types';
+import {
+  AIAdapter,
+  ComposerHandle,
+  CaretContext,
+  TextRange,
+  ComposerChangeCallback,
+  DisposeFunction,
+} from './types';
 
 export class GeminiAdapter implements AIAdapter {
   readonly id = 'gemini';
@@ -16,7 +23,9 @@ export class GeminiAdapter implements AIAdapter {
   findComposer(): ComposerHandle | null {
     const el =
       (document.querySelector('rich-textarea div[contenteditable="true"]') as HTMLElement) ||
-      (document.querySelector('div[contenteditable="true"][aria-label*="prompt"]') as HTMLElement) ||
+      (document.querySelector(
+        'div[contenteditable="true"][aria-label*="prompt"]'
+      ) as HTMLElement) ||
       (document.querySelector('div.ql-editor[contenteditable="true"]') as HTMLElement) ||
       (document.querySelector('textarea.textarea') as HTMLElement) ||
       (document.querySelector('div[contenteditable="true"]') as HTMLElement);

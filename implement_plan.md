@@ -17,15 +17,15 @@ Skill Vault là **universal skill layer cho AI trên web**.
 
 Người dùng có thể:
 
-* lưu prompt/skill/template;
-* lấy một đoạn text trên web và lưu thành skill;
-* mở bất kỳ AI chat được hỗ trợ;
-* gõ `/skill`;
-* tìm skill;
-* chọn skill;
-* Skill Vault render skill;
-* chèn trực tiếp vào ô chat;
-* người dùng kiểm tra rồi tự bấm Send.
+- lưu prompt/skill/template;
+- lấy một đoạn text trên web và lưu thành skill;
+- mở bất kỳ AI chat được hỗ trợ;
+- gõ `/skill`;
+- tìm skill;
+- chọn skill;
+- Skill Vault render skill;
+- chèn trực tiếp vào ô chat;
+- người dùng kiểm tra rồi tự bấm Send.
 
 Core principle:
 
@@ -66,26 +66,26 @@ Skill Vault phải làm thật tốt 5 việc:
 
 ## P1 — Sau MVP
 
-* Skill variables.
-* Slash shortcut riêng như `/review`.
-* Favorites / tags.
-* Import / export Markdown.
-* Generic AI adapter.
-* Keyboard navigation.
-* Usage history.
+- Skill variables.
+- Slash shortcut riêng như `/review`.
+- Favorites / tags.
+- Import / export Markdown.
+- Generic AI adapter.
+- Keyboard navigation.
+- Usage history.
 
 ## P2 — Future
 
-* Cloud sync.
-* Team vault.
-* Community skill packs.
-* Skill marketplace.
-* Skill chaining.
-* Workflow.
-* Agent integration.
-* GitHub sync.
-* SKILL.md compatibility.
-* Shared skill URLs.
+- Cloud sync.
+- Team vault.
+- Community skill packs.
+- Skill marketplace.
+- Skill chaining.
+- Workflow.
+- Agent integration.
+- GitHub sync.
+- SKILL.md compatibility.
+- Shared skill URLs.
 
 ---
 
@@ -237,8 +237,8 @@ Không inject logic trực tiếp vào `MAIN` world trừ khi thực sự bắt 
 Không viết logic kiểu:
 
 ```javascript
-if (location.hostname === "chatgpt.com") {
-   // everything
+if (location.hostname === 'chatgpt.com') {
+  // everything
 }
 ```
 
@@ -269,9 +269,7 @@ interface AIAdapter {
 
   getCaretContext?(): CaretContext;
 
-  observeComposer(
-    callback: ComposerChangeCallback
-  ): DisposeFunction;
+  observeComposer(callback: ComposerChangeCallback): DisposeFunction;
 }
 ```
 
@@ -307,10 +305,10 @@ contenteditable structure
 
 Không dùng text UI duy nhất vì:
 
-* localization;
-* A/B testing;
-* website thay wording;
-* accessibility labels có thể thay đổi.
+- localization;
+- A/B testing;
+- website thay wording;
+- accessibility labels có thể thay đổi.
 
 Detection flow:
 
@@ -451,14 +449,14 @@ Parser input:
 
 ```ts
 type SlashParseResult =
-  | { type: "none" }
+  | { type: 'none' }
   | {
-      type: "skill_palette";
+      type: 'skill_palette';
       query: string;
       range: TextRange;
     }
   | {
-      type: "skill_shortcut";
+      type: 'skill_shortcut';
       shortcut: string;
       args: string[];
       range: TextRange;
@@ -564,17 +562,20 @@ Shadow DOM
 
 Sử dụng Shadow DOM cho:
 
-* command palette;
-* toast;
-* variable form;
-* inline UI.
+- command palette;
+- toast;
+- variable form;
+- inline UI.
 
 Không inject global CSS selectors như:
 
 ```css
-button {}
-input {}
-div {}
+button {
+}
+input {
+}
+div {
+}
 ```
 
 ---
@@ -731,10 +732,7 @@ interface SkillVariable {
   key: string;
   label: string;
 
-  type:
-    | "text"
-    | "textarea"
-    | "select";
+  type: 'text' | 'textarea' | 'select';
 
   required: boolean;
 
@@ -831,11 +829,7 @@ Vì vậy `element.value = text` chưa đủ.
 interface ComposerHandle {
   element: HTMLElement;
 
-  kind:
-    | "textarea"
-    | "contenteditable"
-    | "prosemirror"
-    | "custom";
+  kind: 'textarea' | 'contenteditable' | 'prosemirror' | 'custom';
 
   adapterId: string;
 }
@@ -877,10 +871,10 @@ User manually sends
 
 Điều này:
 
-* tránh gửi nhầm;
-* dễ tạo trust;
-* giảm automation risk;
-* giảm lỗi khi skill render không đúng.
+- tránh gửi nhầm;
+- dễ tạo trust;
+- giảm automation risk;
+- giảm lỗi khi skill render không đúng.
 
 ---
 
@@ -1071,10 +1065,7 @@ Index:
 
 ```json
 {
-  "skill:index": [
-    "sk_01ABC",
-    "sk_01DEF"
-  ]
+  "skill:index": ["sk_01ABC", "sk_01DEF"]
 }
 ```
 
@@ -1095,10 +1086,7 @@ interface SkillRepository {
 
   create(input: CreateSkillInput): Promise<Skill>;
 
-  update(
-    id: string,
-    patch: UpdateSkillInput
-  ): Promise<Skill>;
+  update(id: string, patch: UpdateSkillInput): Promise<Skill>;
 
   remove(id: string): Promise<void>;
 
@@ -1272,11 +1260,7 @@ Conceptually:
 
   "minimum_chrome_version": "116",
 
-  "permissions": [
-    "storage",
-    "contextMenus",
-    "sidePanel"
-  ],
+  "permissions": ["storage", "contextMenus", "sidePanel"],
 
   "background": {
     "service_worker": "background.js",
@@ -1289,11 +1273,7 @@ Conceptually:
 
   "content_scripts": [
     {
-      "matches": [
-        "https://chatgpt.com/*",
-        "https://claude.ai/*",
-        "https://gemini.google.com/*"
-      ],
+      "matches": ["https://chatgpt.com/*", "https://claude.ai/*", "https://gemini.google.com/*"],
 
       "js": ["content.js"],
 

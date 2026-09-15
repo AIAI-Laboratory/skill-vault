@@ -1,5 +1,12 @@
 import { PageContext } from '../domain/types';
-import { AIAdapter, ComposerHandle, CaretContext, TextRange, ComposerChangeCallback, DisposeFunction } from './types';
+import {
+  AIAdapter,
+  ComposerHandle,
+  CaretContext,
+  TextRange,
+  ComposerChangeCallback,
+  DisposeFunction,
+} from './types';
 
 export class ChatGPTAdapter implements AIAdapter {
   readonly id = 'chatgpt';

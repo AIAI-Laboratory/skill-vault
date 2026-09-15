@@ -1,11 +1,8 @@
+import { processAndDetect, DraftSkill } from '../domain/template-detector';
+
 export const CONTEXT_MENU_ID = 'save-selection-as-skill';
 
-export interface DraftSkill {
-  content: string;
-  url: string;
-  title: string;
-  timestamp: number;
-}
+export type { DraftSkill };
 
 export function initContextMenu() {
   if (typeof chrome === 'undefined' || !chrome.contextMenus) return;
@@ -28,7 +25,11 @@ export function handleContextMenuClick(
   }
 
   // 1. MUST be called synchronously to preserve the user gesture in Manifest V3
-  if (typeof chrome !== 'undefined' && chrome.sidePanel && typeof chrome.sidePanel.open === 'function') {
+  if (
+    typeof chrome !== 'undefined' &&
+    chrome.sidePanel &&
+    typeof chrome.sidePanel.open === 'function'
+  ) {
     const windowId = tab?.windowId;
     const tabId = tab?.id;
 
@@ -48,12 +49,30 @@ export function handleContextMenuClick(
     }
   }
 
-  // 2. Persist draft in local storage for the side panel editor
+  // 2. Pre-process and detect template from highlighted selection
+  const rawSelection = info.selectionText;
+  const pageUrl = info.pageUrl || tab?.url || '';
+  const pageTitle = tab?.title || '';
+
+  const detection = processAndDetect(rawSelection, {
+    url: pageUrl,
+    title: pageTitle,
+  });
+
   const draft: DraftSkill = {
-    content: info.selectionText.trim(),
-    url: info.pageUrl || tab?.url || '',
-    title: tab?.title || '',
+    rawContent: rawSelection,
+    content: detection.primaryTemplate.content,
+    url: pageUrl,
+    title: pageTitle,
     timestamp: Date.now(),
+    detectedFormat: detection.formatInfo.format,
+    formatLabel: detection.formatInfo.formatLabel,
+    suggestedName: detection.primaryTemplate.name,
+    suggestedShortcut: detection.primaryTemplate.shortcut,
+    suggestedDescription: detection.primaryTemplate.description,
+    suggestedTags: detection.primaryTemplate.tags,
+    templateOptions: detection.templates,
+    activeTemplateId: detection.primaryTemplate.id,
   };
 
   if (typeof chrome !== 'undefined' && chrome.storage?.local) {
@@ -72,4 +91,3 @@ export function setupContextMenu() {
   initContextMenu();
   setupContextMenuListener();
 }
-

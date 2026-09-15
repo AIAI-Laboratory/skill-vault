@@ -19,10 +19,7 @@ const sizes = [16, 32, 48, 128];
 async function generate() {
   for (const size of sizes) {
     const outFile = path.join(outDir, `icon-${size}.png`);
-    await sharp(srcImage)
-      .resize(size, size)
-      .png()
-      .toFile(outFile);
+    await sharp(srcImage).resize(size, size).png().toFile(outFile);
     console.log(`Generated: ${outFile} (${size}x${size})`);
   }
 }
