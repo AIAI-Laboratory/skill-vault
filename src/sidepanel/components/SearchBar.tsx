@@ -1,5 +1,11 @@
-import React from 'react';
 import { Search, X } from 'lucide-react';
+import {
+  InputGroup,
+  InputGroupInput,
+  InputGroupAddon,
+  InputGroupButton,
+} from '@/components/ui/input-group';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 interface SearchBarProps {
   value: string;
@@ -9,64 +15,47 @@ interface SearchBarProps {
   onSelectTag: (tag: string | null) => void;
 }
 
-export const SearchBar: React.FC<SearchBarProps> = ({
-  value,
-  onChange,
-  tags,
-  selectedTag,
-  onSelectTag,
-}) => {
+export function SearchBar({ value, onChange, tags, selectedTag, onSelectTag }: SearchBarProps) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div className="search-wrapper">
-        <Search className="search-icon" size={16} />
-        <input
-          type="text"
-          className="search-input"
-          placeholder="Search skills, /shortcuts, or tags..."
+    <div className="flex min-w-0 flex-col gap-3">
+      <InputGroup>
+        <InputGroupAddon>
+          <Search />
+        </InputGroupAddon>
+        <InputGroupInput
+          type="search"
+          aria-label="Search skills"
+          placeholder="Search skills, shortcuts, or tags…"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(event) => onChange(event.target.value)}
         />
         {value && (
-          <button
-            onClick={() => onChange('')}
-            style={{
-              position: 'absolute',
-              right: 10,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              background: 'none',
-              border: 'none',
-              color: '#9CA3AF',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-            }}
-          >
-            <X size={14} />
-          </button>
+          <InputGroupAddon align="inline-end">
+            <InputGroupButton size="icon-xs" aria-label="Clear search" onClick={() => onChange('')}>
+              <X />
+            </InputGroupButton>
+          </InputGroupAddon>
         )}
-      </div>
-
+      </InputGroup>
       {tags.length > 0 && (
-        <div className="tags-row">
-          <button
-            className={`tag-pill ${selectedTag === null ? 'active' : ''}`}
-            onClick={() => onSelectTag(null)}
+        <div className="overflow-x-auto pb-1">
+          <ToggleGroup
+            aria-label="Filter by tag"
+            value={[selectedTag ?? '']}
+            onValueChange={(values) => onSelectTag(values[0] || null)}
+            size="sm"
+            variant="outline"
+            spacing={1}
           >
-            All
-          </button>
-          {tags.map((tag) => (
-            <button
-              key={tag}
-              className={`tag-pill ${selectedTag === tag ? 'active' : ''}`}
-              onClick={() => onSelectTag(selectedTag === tag ? null : tag)}
-            >
-              #{tag}
-            </button>
-          ))}
+            <ToggleGroupItem value="">All tags</ToggleGroupItem>
+            {tags.map((tag) => (
+              <ToggleGroupItem key={tag} value={tag}>
+                #{tag}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
         </div>
       )}
     </div>
   );
-};
+}

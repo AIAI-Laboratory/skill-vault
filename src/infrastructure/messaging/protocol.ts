@@ -4,6 +4,7 @@ import {
   UpdateSkillInput,
   SkillSearchResult,
   SkillVaultSettings,
+  TrashedSkill,
 } from '../../domain/types';
 import type { DraftSkill } from '../../domain/template-detector';
 
@@ -14,6 +15,8 @@ export type MessageType =
   | 'SKILL_CREATE'
   | 'SKILL_UPDATE'
   | 'SKILL_DELETE'
+  | 'SKILL_TRASH_LIST'
+  | 'SKILL_RESTORE'
   | 'SKILL_RECORD_USAGE'
   | 'SETTINGS_GET'
   | 'SETTINGS_UPDATE'
@@ -43,6 +46,8 @@ export interface MessagePayloadMap {
   SKILL_CREATE: CreateSkillInput;
   SKILL_UPDATE: { id: string; patch: UpdateSkillInput };
   SKILL_DELETE: { id: string };
+  SKILL_TRASH_LIST: undefined;
+  SKILL_RESTORE: { id: string };
   SKILL_RECORD_USAGE: { id: string };
   SETTINGS_GET: undefined;
   SETTINGS_UPDATE: Partial<SkillVaultSettings>;
@@ -58,6 +63,8 @@ export interface MessageResponseMap {
   SKILL_CREATE: Skill;
   SKILL_UPDATE: Skill;
   SKILL_DELETE: boolean;
+  SKILL_TRASH_LIST: TrashedSkill[];
+  SKILL_RESTORE: Skill;
   SKILL_RECORD_USAGE: boolean;
   SETTINGS_GET: SkillVaultSettings;
   SETTINGS_UPDATE: SkillVaultSettings;

@@ -1,5 +1,7 @@
 import { SkillRepository } from '../infrastructure/storage/repository';
 import { ExtensionMessage, ExtensionResponse } from '../infrastructure/messaging/protocol';
+import { enqueueTask } from './task-queue';
+import { refreshTrashCleanup } from './trash-cleanup';
 
 export function setupMessageRouter() {
   const repository = SkillRepository.getInstance();
@@ -9,7 +11,7 @@ export function setupMessageRouter() {
       return false;
     }
 
-    handleMessage(msg, repository)
+    enqueueTask(() => handleMessage(msg, repository))
       .then((data) => {
         const response: ExtensionResponse = {
           id: msg.id,
@@ -59,7 +61,18 @@ async function handleMessage(msg: ExtensionMessage, repository: SkillRepository)
       const id = msg.payload?.id;
       if (!id) throw new Error('Skill ID is required');
       await repository.remove(id);
+      await refreshTrashCleanup(repository);
       return true;
+    }
+    case 'SKILL_TRASH_LIST': {
+      return await repository.listTrash();
+    }
+    case 'SKILL_RESTORE': {
+      const id = msg.payload?.id;
+      if (!id) throw new Error('Skill ID is required');
+      const skill = await repository.restore(id);
+      await refreshTrashCleanup(repository);
+      return skill;
     }
     case 'SKILL_RECORD_USAGE': {
       const id = msg.payload?.id;

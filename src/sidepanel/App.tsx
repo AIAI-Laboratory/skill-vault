@@ -1,17 +1,43 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Plus, BookOpen, Star, Settings as SettingsIcon, AlertCircle } from 'lucide-react';
-import { Skill, CreateSkillInput, SkillVaultSettings, DEFAULT_SETTINGS } from '../domain/types';
+import {
+  Plus,
+  BookOpen,
+  Star,
+  Trash2,
+  Settings as SettingsIcon,
+  AlertCircle,
+  Layers3,
+  ShieldCheck,
+  Terminal,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { Toaster, toast } from '@/components/ui/toast';
+import {
+  Skill,
+  TrashedSkill,
+  CreateSkillInput,
+  SkillVaultSettings,
+  DEFAULT_SETTINGS,
+} from '../domain/types';
 import { DraftSkill } from '../domain/template-detector';
 import { sendExtensionMessage } from '../infrastructure/messaging/client';
 import { SearchBar } from './components/SearchBar';
 import { SkillList } from './components/SkillList';
 import { SkillEditor } from './components/SkillEditor';
 import { Settings } from './components/Settings';
+import { TrashList } from './components/TrashList';
 
-type ActiveTab = 'all' | 'favorites' | 'settings';
+type ActiveTab = 'all' | 'favorites' | 'trash' | 'settings';
 
 export const App: React.FC = () => {
   const [skills, setSkills] = useState<Skill[]>([]);
+  const [trash, setTrash] = useState<TrashedSkill[]>([]);
   const [settings, setSettings] = useState<SkillVaultSettings>(DEFAULT_SETTINGS);
   const [activeTab, setActiveTab] = useState<ActiveTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -24,20 +50,36 @@ export const App: React.FC = () => {
   // Draft text from right-click context menu
   const [draftSkill, setDraftSkill] = useState<DraftSkill | null>(null);
 
-  // Toast notification
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 2500);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const showToast = (title: string) => {
+    toast.add({ title });
   };
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const apply = () =>
+      document.documentElement.classList.toggle(
+        'dark',
+        settings.theme === 'dark' || (settings.theme === 'system' && media.matches)
+      );
+    apply();
+    media.addEventListener('change', apply);
+    return () => media.removeEventListener('change', apply);
+  }, [settings.theme]);
 
   const loadSkills = async () => {
     try {
       const list = await sendExtensionMessage('SKILL_LIST');
       setSkills(list);
+      setLoadError(null);
     } catch (err) {
       console.error('Failed to load skills:', err);
+      setLoadError(
+        'Could not connect to your vault. Open this panel from the Skill Vault extension and try again.'
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -47,6 +89,14 @@ export const App: React.FC = () => {
       setSettings(s);
     } catch (err) {
       console.error('Failed to load settings:', err);
+    }
+  };
+
+  const loadTrash = async () => {
+    try {
+      setTrash(await sendExtensionMessage('SKILL_TRASH_LIST'));
+    } catch (err) {
+      console.error('Failed to load trash:', err);
     }
   };
 
@@ -69,6 +119,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     loadSkills();
+    loadTrash();
     loadSettings();
     checkDraftSkill();
 
@@ -87,11 +138,20 @@ export const App: React.FC = () => {
         if (changes['skill:index']) {
           loadSkills();
         }
+        if (changes['skill:trash']) {
+          loadTrash();
+        }
       };
       chrome.storage.onChanged.addListener(listener);
       return () => chrome.storage.onChanged.removeListener(listener);
     }
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'trash') return;
+    const interval = setInterval(() => void loadTrash(), 30_000);
+    return () => clearInterval(interval);
+  }, [activeTab]);
 
   // Collect all unique tags
   const allTags = useMemo(() => {
@@ -119,7 +179,7 @@ export const App: React.FC = () => {
 
       // Search query filter
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+        const q = searchQuery.trim().toLowerCase().replace(/^\//, '');
         const matchName = skill.name.toLowerCase().includes(q);
         const matchShortcut = (skill.shortcut || '').toLowerCase().includes(q);
         const matchDesc = (skill.description || '').toLowerCase().includes(q);
@@ -152,11 +212,25 @@ export const App: React.FC = () => {
   const handleDeleteSkill = async (id: string) => {
     try {
       await sendExtensionMessage('SKILL_DELETE', { id });
-      showToast('Skill deleted');
-      await loadSkills();
+      showToast('Moved to trash. Automatically deleted after 24 hours.');
+      await Promise.all([loadSkills(), loadTrash()]);
     } catch (err: any) {
       showToast(err.message || 'Failed to delete');
     }
+  };
+
+  const handleRestoreSkill = async (entry: TrashedSkill) => {
+    try {
+      const restored = await sendExtensionMessage('SKILL_RESTORE', { id: entry.skill.id });
+      showToast(
+        entry.skill.shortcut && !restored.shortcut
+          ? 'Skill restored without its shortcut because it is already in use.'
+          : 'Skill restored'
+      );
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to restore');
+    }
+    await Promise.all([loadSkills(), loadTrash()]);
   };
 
   // Toggle favorite
@@ -228,153 +302,227 @@ export const App: React.FC = () => {
     }
   };
 
+  const createSkill = () => {
+    setEditingSkill(null);
+    setIsEditing(true);
+  };
+  const hasFilters = Boolean(searchQuery.trim() || selectedTag);
+  const clearFilters = () => {
+    setSearchQuery('');
+    setSelectedTag(null);
+  };
+
+  const library = (
+    <div className="flex flex-col gap-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-primary">
+            Your prompt workspace
+          </p>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {activeTab === 'favorites' ? 'The go-to collection.' : 'Good prompts. On repeat.'}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {activeTab === 'favorites'
+              ? 'Your favorite skills, one step closer.'
+              : 'Save what works. Make it work everywhere.'}
+          </p>
+        </div>
+      </div>
+      <SearchBar
+        value={searchQuery}
+        onChange={setSearchQuery}
+        tags={allTags}
+        selectedTag={selectedTag}
+        onSelectTag={setSelectedTag}
+      />
+      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span>{activeTab === 'favorites' ? 'FAVORITE SKILLS' : 'YOUR LIBRARY'}</span>
+        <span aria-live="polite">
+          {filteredSkills.length} {filteredSkills.length === 1 ? 'skill' : 'skills'}
+          {hasFilters ? ' found' : ''}
+        </span>
+      </div>
+      <SkillList
+        skills={filteredSkills}
+        onEdit={(skill) => {
+          setEditingSkill(skill);
+          setIsEditing(true);
+        }}
+        onDelete={handleDeleteSkill}
+        onToggleFavorite={handleToggleFavorite}
+        onShowToast={showToast}
+        onCreateNew={createSkill}
+        hasFilters={hasFilters}
+        favoritesOnly={activeTab === 'favorites'}
+        onClearFilters={clearFilters}
+      />
+    </div>
+  );
+
   return (
-    <div className="app-container">
-      {/* Header */}
-      <header className="app-header">
-        <div className="brand-row">
-          <img src="/icons/icon-32.png" alt="Skill Vault" className="brand-icon" />
-          <span className="brand-title">Skill Vault</span>
-          <span className="brand-tag">v0.1</span>
-        </div>
-        <div className="header-actions">
-          {!isEditing && (
-            <button
-              className="btn-primary"
-              onClick={() => {
-                setEditingSkill(null);
-                setIsEditing(true);
-              }}
-            >
-              <Plus size={14} /> New Skill
-            </button>
-          )}
-        </div>
-      </header>
-
-      {/* Tabs */}
-      {!isEditing && (
-        <nav className="nav-tabs">
-          <button
-            className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`}
-            onClick={() => setActiveTab('all')}
-          >
-            <BookOpen size={13} /> Vault ({skills.length})
-          </button>
-          <button
-            className={`tab-btn ${activeTab === 'favorites' ? 'active' : ''}`}
-            onClick={() => setActiveTab('favorites')}
-          >
-            <Star size={13} /> Favorites ({skills.filter((s) => s.favorite).length})
-          </button>
-          <button
-            className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
-            onClick={() => setActiveTab('settings')}
-          >
-            <SettingsIcon size={13} /> Settings
-          </button>
-        </nav>
-      )}
-
-      {/* Body Area */}
-      <main className="main-content">
-        {/* Highlighted text draft banner */}
-        {!isEditing && draftSkill && (
-          <div className="draft-alert">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <AlertCircle size={16} color="#FF453A" />
-              <span className="draft-alert-text">
-                Selection saved: <strong>{draftSkill.formatLabel || 'Content'}</strong>. Ready to
-                create skill!
-              </span>
+    <TooltipProvider delay={300}>
+      <div className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col">
+        <header className="flex items-center justify-between gap-3 px-5 py-5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <Layers3 className="size-5" />
             </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button
-                className="btn-primary"
-                style={{ padding: '4px 8px', fontSize: 11 }}
-                onClick={handleUseDraft}
-              >
-                Create
-              </button>
-              <button
-                className="btn-secondary"
-                style={{ padding: '4px 8px', fontSize: 11 }}
-                onClick={handleDismissDraft}
-              >
-                Dismiss
-              </button>
+            <div>
+              <p className="font-semibold tracking-tight">Skill Vault</p>
+              <p className="text-[11px] text-muted-foreground">
+                A little library. A lot of possibility.
+              </p>
             </div>
           </div>
-        )}
-
+          {!isEditing && (
+            <Button onClick={createSkill}>
+              <Plus data-icon="inline-start" />
+              New skill
+            </Button>
+          )}
+        </header>
+        <Separator />
         {isEditing ? (
-          <SkillEditor
-            key={
-              editingSkill?.id ||
-              (draftSkill ? `draft-${draftSkill.timestamp || draftSkill.content}` : 'new')
-            }
-            initialSkill={editingSkill}
-            initialDraftContent={!editingSkill ? draftSkill?.content : undefined}
-            draftSkill={!editingSkill ? draftSkill : null}
-            draftMeta={
-              !editingSkill && draftSkill ? { title: draftSkill.title, url: draftSkill.url } : null
-            }
-            onSave={async (data, id) => {
-              await handleSaveSkill(data, id);
-              if (draftSkill) {
-                await handleDismissDraft();
+          <main className="flex-1 p-5">
+            <SkillEditor
+              key={
+                editingSkill?.id ||
+                (draftSkill ? `draft-${draftSkill.timestamp || draftSkill.content}` : 'new')
               }
-            }}
-            onCancel={async () => {
-              setIsEditing(false);
-              setEditingSkill(null);
-              if (draftSkill) {
-                await handleDismissDraft();
+              initialSkill={editingSkill}
+              initialDraftContent={!editingSkill ? draftSkill?.content : undefined}
+              draftSkill={!editingSkill ? draftSkill : null}
+              draftMeta={
+                !editingSkill && draftSkill
+                  ? { title: draftSkill.title, url: draftSkill.url }
+                  : null
               }
-            }}
-          />
-        ) : activeTab === 'settings' ? (
-          <Settings
-            settings={settings}
-            skills={skills}
-            onUpdateSettings={async (patch) => {
-              const updated = await sendExtensionMessage('SETTINGS_UPDATE', patch);
-              setSettings(updated);
-              showToast('Settings saved');
-            }}
-            onExport={handleExport}
-            onImport={handleImport}
-          />
-        ) : (
-          <>
-            <SearchBar
-              value={searchQuery}
-              onChange={setSearchQuery}
-              tags={allTags}
-              selectedTag={selectedTag}
-              onSelectTag={setSelectedTag}
-            />
-
-            <SkillList
-              skills={filteredSkills}
-              onEdit={(skill) => {
-                setEditingSkill(skill);
-                setIsEditing(true);
+              onSave={async (data, id) => {
+                await handleSaveSkill(data, id);
+                if (draftSkill) await handleDismissDraft();
               }}
-              onDelete={handleDeleteSkill}
-              onToggleFavorite={handleToggleFavorite}
-              onShowToast={showToast}
-              onCreateNew={() => {
+              onCancel={async () => {
+                setIsEditing(false);
                 setEditingSkill(null);
-                setIsEditing(true);
+                if (draftSkill) await handleDismissDraft();
               }}
             />
-          </>
+          </main>
+        ) : (
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => {
+              setActiveTab(value as ActiveTab);
+              if (value === 'trash') void loadTrash();
+            }}
+            className="flex-1 gap-0"
+          >
+            <nav className="px-4 py-3" aria-label="Vault navigation">
+              <TabsList className="w-full">
+                <TabsTrigger value="all">
+                  <BookOpen />
+                  Vault<Badge variant="secondary">{skills.length}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="favorites">
+                  <Star />
+                  Favorites
+                </TabsTrigger>
+                <TabsTrigger value="trash" aria-label={`Trash, ${trash.length} skills`}>
+                  <Trash2 />
+                  Trash
+                </TabsTrigger>
+                <TabsTrigger value="settings" aria-label="Settings">
+                  <SettingsIcon />
+                  <span className="sr-only min-[380px]:not-sr-only">Settings</span>
+                </TabsTrigger>
+              </TabsList>
+            </nav>
+            <main className="flex flex-1 flex-col px-5 pt-3 pb-6">
+              {draftSkill && (
+                <Alert className="mb-5">
+                  <AlertCircle />
+                  <AlertTitle>Turn your selection into a skill</AlertTitle>
+                  <AlertDescription>
+                    <p>{draftSkill.formatLabel || 'Content'} saved and ready to use.</p>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={handleUseDraft}>
+                        Create skill
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={handleDismissDraft}>
+                        Dismiss
+                      </Button>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+              {loadError && (
+                <Alert variant="destructive" className="mb-5">
+                  <AlertCircle />
+                  <AlertTitle>Vault unavailable</AlertTitle>
+                  <AlertDescription>
+                    {loadError}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 w-fit"
+                      onClick={() => void loadSkills()}
+                    >
+                      Try again
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+              <TabsContent value="all">
+                {loading ? (
+                  <div className="flex flex-col gap-4" role="status" aria-label="Loading skills">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-36 w-full" />
+                    <Skeleton className="h-36 w-full" />
+                  </div>
+                ) : (
+                  library
+                )}
+              </TabsContent>
+              <TabsContent value="favorites">{library}</TabsContent>
+              <TabsContent value="trash">
+                <TrashList entries={trash} onRestore={handleRestoreSkill} />
+              </TabsContent>
+              <TabsContent value="settings">
+                <Settings
+                  settings={settings}
+                  skills={skills}
+                  onUpdateSettings={async (patch) => {
+                    try {
+                      const updated = await sendExtensionMessage('SETTINGS_UPDATE', patch);
+                      setSettings(updated);
+                      showToast('Settings saved');
+                    } catch (err) {
+                      showToast(err instanceof Error ? err.message : 'Could not save settings');
+                    }
+                  }}
+                  onExport={handleExport}
+                  onImport={handleImport}
+                />
+              </TabsContent>
+            </main>
+          </Tabs>
         )}
-      </main>
-
-      {/* Toast */}
-      {toastMessage && <div className="toast">{toastMessage}</div>}
-    </div>
+        <footer className="mt-auto px-5 pb-4">
+          <Separator className="mb-3" />
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <ShieldCheck className="size-3.5" />
+              Local. Private. Yours.
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Terminal className="size-3.5" />
+              Type <code className="text-foreground">/skill</code> in your AI chat
+            </span>
+          </div>
+        </footer>
+      </div>
+      <Toaster />
+    </TooltipProvider>
   );
 };

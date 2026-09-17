@@ -59,6 +59,7 @@ npm run build
 - Browse curated seed skills (**Code Review**, **Explain Simply**, **Professional Rewrite**, **Bug Investigator**).
 - Click **+ New Skill** to create your own skills with custom shortcuts (e.g., `review`, `explain`, `debug`).
 - Use variables like `{{selected_text}}`, `{{current_date}}`, `{{page_title}}`, `{{page_url}}`.
+- Click the trash icon to move a skill to **Trash** immediately, without a confirmation dialog. Restore it from the **Trash** tab within 24 hours; after that it is permanently deleted. If the browser is closed or the device is asleep, overdue trash is cleaned up when the extension runs again. Trashed skills are excluded from search, favorites, and JSON backups.
 
 ### 2. Triggering `/skill` in AI Chats
 
@@ -85,7 +86,7 @@ npm run build
 ## 🛠️ Tech Stack & Architecture
 
 - **Manifest V3:** Background Service Worker (`src/background/`)
-- **UI Framework:** React 19 + Vanilla CSS (`src/sidepanel/`)
+- **UI Framework:** React 19 + shadcn/ui (Base UI) + Tailwind CSS 4 (`src/sidepanel/`)
 - **Content Runtime:** Vanilla TypeScript + Web Components & Shadow DOM (`src/content/`)
 - **AI Adapters:** Modular adapter engine for ChatGPT, Claude, Gemini, and Generic fallback (`src/adapters/`)
 - **Build System:** Vite (`scripts/build.mjs`)

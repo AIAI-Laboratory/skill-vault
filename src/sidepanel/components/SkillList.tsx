@@ -1,7 +1,15 @@
-import React from 'react';
-import { Plus } from 'lucide-react';
+import { BookOpen, Plus, Search, Star } from 'lucide-react';
 import { Skill } from '../../domain/types';
 import { SkillCard } from './SkillCard';
+import { Button } from '@/components/ui/button';
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from '@/components/ui/empty';
 
 interface SkillListProps {
   skills: Skill[];
@@ -10,42 +18,64 @@ interface SkillListProps {
   onToggleFavorite: (id: string, current: boolean) => void;
   onShowToast: (msg: string) => void;
   onCreateNew: () => void;
+  hasFilters: boolean;
+  favoritesOnly: boolean;
+  onClearFilters: () => void;
 }
 
-export const SkillList: React.FC<SkillListProps> = ({
+export function SkillList({
   skills,
-  onEdit,
-  onDelete,
-  onToggleFavorite,
-  onShowToast,
   onCreateNew,
-}) => {
+  hasFilters,
+  favoritesOnly,
+  onClearFilters,
+  ...actions
+}: SkillListProps) {
   if (skills.length === 0) {
+    const Icon = hasFilters ? Search : favoritesOnly ? Star : BookOpen;
     return (
-      <div className="empty-state">
-        <div className="empty-title">No skills found</div>
-        <div className="empty-desc">
-          Add your favorite prompts and commands to access them anywhere with <code>/skill</code>.
-        </div>
-        <button className="btn-primary" onClick={onCreateNew} style={{ marginTop: 8 }}>
-          <Plus size={14} /> Create First Skill
-        </button>
-      </div>
+      <Empty className="min-h-64 border">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Icon />
+          </EmptyMedia>
+          <EmptyTitle>
+            {hasFilters
+              ? 'No matching skills'
+              : favoritesOnly
+                ? 'Keep your best skills close'
+                : 'Your next great prompt starts here'}
+          </EmptyTitle>
+          <EmptyDescription>
+            {hasFilters
+              ? 'Try a different search or clear your filters to see more skills.'
+              : favoritesOnly
+                ? 'Star a skill in your vault and it will appear here for quick access.'
+                : 'Save a prompt once, then bring it into any AI conversation with /skill.'}
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          {hasFilters ? (
+            <Button variant="outline" onClick={onClearFilters}>
+              Clear filters
+            </Button>
+          ) : (
+            !favoritesOnly && (
+              <Button onClick={onCreateNew}>
+                <Plus data-icon="inline-start" />
+                Create your first skill
+              </Button>
+            )
+          )}
+        </EmptyContent>
+      </Empty>
     );
   }
-
   return (
-    <div className="skills-list">
+    <div className="flex flex-col gap-3">
       {skills.map((skill) => (
-        <SkillCard
-          key={skill.id}
-          skill={skill}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          onToggleFavorite={onToggleFavorite}
-          onShowToast={onShowToast}
-        />
+        <SkillCard key={skill.id} skill={skill} {...actions} />
       ))}
     </div>
   );
-};
+}

@@ -1,5 +1,22 @@
 import React, { useState } from 'react';
-import { Save, X, Star, Wand2 } from 'lucide-react';
+import { Save, ArrowLeft, Wand2, FileText, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
+import { Spinner } from '@/components/ui/spinner';
 import { Skill, CreateSkillInput } from '../../domain/types';
 import { isValidShortcut } from '../../domain/skill';
 import { DraftSkill, TemplateOption, processAndDetect } from '../../domain/template-detector';
@@ -116,7 +133,8 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
           content,
           tags,
           favorite,
-          variables: [],
+          variables: initialSkill?.variables ?? [],
+          providers: initialSkill?.providers,
         },
         initialSkill?.id
       );
@@ -127,227 +145,214 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
     }
   };
 
+  const invalidShortcut = Boolean(shortcut && !shortcutCheck.valid);
+
   return (
-    <form className="editor-form" onSubmit={handleSubmit}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#FFFFFF' }}>
-          {initialSkill ? 'Edit Skill' : 'Create New Skill'}
-        </h3>
-        <button type="button" className="btn-icon" onClick={onCancel} title="Close">
-          <X size={16} />
-        </button>
+    <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
+      <div className="flex flex-col gap-3">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="w-fit"
+          onClick={onCancel}
+          disabled={saving}
+        >
+          <ArrowLeft data-icon="inline-start" />
+          Back to vault
+        </Button>
+        <div>
+          <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.2em] text-primary">
+            A prompt worth keeping
+          </p>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {initialSkill ? 'Refine your skill.' : 'Create something reusable.'}
+          </h1>
+          <p className="mt-1 text-muted-foreground">
+            Give your best instructions a permanent home.
+          </p>
+        </div>
       </div>
-
-      {/* Auto-detected Format & Template Presets */}
       {activeFormatInfo.formatLabel && (
-        <div className="format-detection-banner">
-          <div className="format-badge-row">
-            <span className="format-badge">✨ {activeFormatInfo.formatLabel}</span>
-            <span className="format-subtext">
+        <Alert>
+          <Wand2 />
+          <AlertTitle>{activeFormatInfo.formatLabel} detected</AlertTitle>
+          <AlertDescription>
+            <p>
               {activeFormatInfo.selectedTemplateId === 'original_selection'
-                ? 'Original selection preserved'
-                : 'Template applied'}
-            </span>
-          </div>
-
-          {activeFormatInfo.templateOptions && activeFormatInfo.templateOptions.length > 1 && (
-            <div className="template-options-row">
-              <span className="template-options-label">Templates:</span>
-              <div className="template-chips">
-                {activeFormatInfo.templateOptions.map((tpl) => {
-                  const isActive = activeFormatInfo.selectedTemplateId === tpl.id;
-                  return (
-                    <button
-                      key={tpl.id}
-                      type="button"
-                      className={`template-chip ${isActive ? 'active' : ''}`}
-                      onClick={() => handleSelectTemplate(tpl)}
-                      title={tpl.description}
-                    >
-                      {isActive ? `★ ${tpl.label}` : tpl.label}
-                    </button>
+                ? 'Original selection preserved.'
+                : 'A matching template has been applied.'}
+            </p>
+            {activeFormatInfo.templateOptions && activeFormatInfo.templateOptions.length > 1 && (
+              <ToggleGroup
+                aria-label="Prompt template"
+                variant="outline"
+                size="sm"
+                value={
+                  activeFormatInfo.selectedTemplateId ? [activeFormatInfo.selectedTemplateId] : []
+                }
+                onValueChange={(values) => {
+                  const template = activeFormatInfo.templateOptions?.find(
+                    (option) => option.id === values[0]
                   );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
+                  if (template) handleSelectTemplate(template);
+                }}
+                className="flex-wrap"
+              >
+                {activeFormatInfo.templateOptions.map((template) => (
+                  <ToggleGroupItem
+                    key={template.id}
+                    value={template.id}
+                    title={template.description}
+                  >
+                    {template.label}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+            )}
+          </AlertDescription>
+        </Alert>
       )}
-
       {draftMeta && (
-        <div
-          style={{
-            background: 'rgba(255, 69, 58, 0.12)',
-            border: '1px solid var(--accent-red-border)',
-            borderRadius: 'var(--radius-md)',
-            padding: '8px 12px',
-            fontSize: 12,
-            color: '#FEE2E2',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-          }}
-        >
-          <span>
-            Draft text imported from:{' '}
-            <strong>{draftMeta.title || draftMeta.url || 'Webpage selection'}</strong>
-          </span>
-        </div>
+        <Alert>
+          <FileText />
+          <AlertTitle>Saved from a webpage</AlertTitle>
+          <AlertDescription className="break-words">
+            {draftMeta.title || draftMeta.url || 'Webpage selection'}
+          </AlertDescription>
+        </Alert>
       )}
-
-      {error && <div className="form-error">{error}</div>}
-
-      <div className="form-group">
-        <label className="form-label">
-          Skill Name <span className="req">*</span>
-        </label>
-        <input
-          type="text"
-          className="form-input"
-          placeholder="e.g. Senior Code Review"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
-      </div>
-
-      <div className="form-group">
-        <label className="form-label">
-          Slash Shortcut <span style={{ color: '#9CA3AF', fontWeight: 400 }}>(optional)</span>
-        </label>
-        <input
-          type="text"
-          className="form-input"
-          placeholder="e.g. review (without slash)"
-          value={shortcut}
-          onChange={(e) => setShortcut(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-        />
-        <div className="form-hint">
-          {shortcut ? (
-            shortcutCheck.valid ? (
-              <span style={{ color: '#10B981' }}>
-                Trigger in AI with: <code>/{shortcut}</code>
-              </span>
-            ) : (
-              <span style={{ color: '#EF4444' }}>{shortcutCheck.error}</span>
-            )
-          ) : (
-            'Allows quick triggering via /<shortcut>'
-          )}
-        </div>
-      </div>
-
-      <div className="form-group">
-        <label className="form-label">Description</label>
-        <input
-          type="text"
-          className="form-input"
-          placeholder="Short summary of what this skill does"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-      </div>
-
-      <div className="form-group">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <label className="form-label" style={{ margin: 0 }}>
-            Prompt Content <span className="req">*</span>
-          </label>
-          <button
-            type="button"
-            className="btn-detect-template"
-            onClick={handleAutoDetectFromContent}
-            title="Analyze prompt content, detect format, and apply matching template"
-          >
-            <Wand2 size={12} /> Auto-Detect Template
-          </button>
-        </div>
-        <textarea
-          className="form-textarea"
-          placeholder="Enter prompt instructions... Use {{selected_text}} to automatically inject highlighted text."
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          required
-        />
-        <div className="form-hint">Insert variable:</div>
-        <div className="var-chips">
-          <button
-            type="button"
-            className="var-chip-btn"
-            onClick={() => handleInsertVariable('selected_text')}
-          >
-            + {'{{selected_text}}'}
-          </button>
-          <button
-            type="button"
-            className="var-chip-btn"
-            onClick={() => handleInsertVariable('current_date')}
-          >
-            + {'{{current_date}}'}
-          </button>
-          <button
-            type="button"
-            className="var-chip-btn"
-            onClick={() => handleInsertVariable('page_title')}
-          >
-            + {'{{page_title}}'}
-          </button>
-          <button
-            type="button"
-            className="var-chip-btn"
-            onClick={() => handleInsertVariable('page_url')}
-          >
-            + {'{{page_url}}'}
-          </button>
-        </div>
-      </div>
-
-      <div className="form-group">
-        <label className="form-label">Tags</label>
-        <input
-          type="text"
-          className="form-input"
-          placeholder="Comma separated: coding, review, python"
-          value={tagsStr}
-          onChange={(e) => setTagsStr(e.target.value)}
-        />
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <input
-          type="checkbox"
-          id="fav-check"
-          checked={favorite}
-          onChange={(e) => setFavorite(e.target.checked)}
-          style={{ accentColor: '#FF453A', cursor: 'pointer' }}
-        />
-        <label
-          htmlFor="fav-check"
-          style={{
-            fontSize: 13,
-            color: '#D1D5DB',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-          }}
-        >
-          <Star
-            size={14}
-            fill={favorite ? '#FBBF24' : 'none'}
-            color={favorite ? '#FBBF24' : '#9CA3AF'}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle />
+          <AlertTitle>Could not save this skill</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      <FieldGroup className="gap-5">
+        <Field data-invalid={Boolean(error && !name.trim())}>
+          <FieldLabel htmlFor="skill-name">
+            Skill name <span className="text-destructive">*</span>
+          </FieldLabel>
+          <Input
+            id="skill-name"
+            placeholder="e.g. Senior code review"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+            autoFocus
+            aria-invalid={Boolean(error && !name.trim())}
           />
-          Add to Favorites
-        </label>
-      </div>
-
-      <div className="editor-footer">
-        <button type="button" className="btn-secondary" onClick={onCancel}>
+        </Field>
+        <Field data-invalid={invalidShortcut}>
+          <FieldLabel htmlFor="skill-shortcut">
+            Shortcut <span className="font-normal text-muted-foreground">(optional)</span>
+          </FieldLabel>
+          <InputGroup>
+            <InputGroupAddon>/</InputGroupAddon>
+            <InputGroupInput
+              id="skill-shortcut"
+              placeholder="review"
+              value={shortcut}
+              onChange={(event) =>
+                setShortcut(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))
+              }
+              aria-invalid={invalidShortcut}
+              aria-describedby="shortcut-hint"
+            />
+          </InputGroup>
+          {invalidShortcut ? (
+            <FieldError id="shortcut-hint">{shortcutCheck.error}</FieldError>
+          ) : (
+            <FieldDescription id="shortcut-hint">
+              Find it in your AI chat with <code>/skill {shortcut || 'shortcut'}</code>.
+            </FieldDescription>
+          )}
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="skill-description">
+            Description <span className="font-normal text-muted-foreground">(optional)</span>
+          </FieldLabel>
+          <Input
+            id="skill-description"
+            placeholder="What does this skill help you do?"
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+          />
+        </Field>
+        <Separator />
+        <Field data-invalid={Boolean(error && !content.trim())}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <FieldLabel htmlFor="skill-content">
+              Prompt <span className="text-destructive">*</span>
+            </FieldLabel>
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              disabled={!content.trim()}
+              onClick={handleAutoDetectFromContent}
+              title="Detect the content format and fill fields with a matching template"
+            >
+              <Wand2 data-icon="inline-start" />
+              Detect template
+            </Button>
+          </div>
+          <Textarea
+            id="skill-content"
+            className="min-h-52"
+            placeholder="Write the instructions you want to reuse…"
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+            required
+            aria-invalid={Boolean(error && !content.trim())}
+            aria-describedby="variables-hint"
+          />
+          <FieldDescription id="variables-hint">
+            Make it dynamic. Insert a variable to fill in context when the skill runs.
+          </FieldDescription>
+          <div className="flex flex-wrap gap-1.5">
+            {['selected_text', 'current_date', 'page_title', 'page_url'].map((variable) => (
+              <Button
+                key={variable}
+                type="button"
+                variant="secondary"
+                size="xs"
+                onClick={() => handleInsertVariable(variable)}
+              >{`{{${variable}}}`}</Button>
+            ))}
+          </div>
+        </Field>
+        <Separator />
+        <Field>
+          <FieldLabel htmlFor="skill-tags">Tags</FieldLabel>
+          <Input
+            id="skill-tags"
+            placeholder="coding, review, productivity"
+            value={tagsStr}
+            onChange={(event) => setTagsStr(event.target.value)}
+            aria-describedby="tags-hint"
+          />
+          <FieldDescription id="tags-hint">
+            Separate tags with commas to keep your library organized.
+          </FieldDescription>
+        </Field>
+        <Field orientation="horizontal">
+          <FieldContent>
+            <FieldLabel htmlFor="skill-favorite">Add to favorites</FieldLabel>
+            <FieldDescription>Keep this skill within easy reach.</FieldDescription>
+          </FieldContent>
+          <Switch id="skill-favorite" checked={favorite} onCheckedChange={setFavorite} />
+        </Field>
+      </FieldGroup>
+      <div className="sticky bottom-0 -mx-5 flex justify-end gap-2 border-t bg-background/95 px-5 py-4 backdrop-blur-sm">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>
           Cancel
-        </button>
-        <button type="submit" className="btn-primary" disabled={saving}>
-          <Save size={14} /> {saving ? 'Saving...' : 'Save Skill'}
-        </button>
+        </Button>
+        <Button type="submit" disabled={saving}>
+          {saving ? <Spinner data-icon="inline-start" /> : <Save data-icon="inline-start" />}
+          {saving ? 'Saving…' : 'Save skill'}
+        </Button>
       </div>
     </form>
   );

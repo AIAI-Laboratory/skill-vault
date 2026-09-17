@@ -44,6 +44,12 @@ export type CreateSkillInput = Omit<
 
 export type UpdateSkillInput = Partial<Omit<Skill, 'id' | 'createdAt' | 'schemaVersion'>>;
 
+export interface TrashedSkill {
+  skill: Skill;
+  deletedAt: number;
+  expiresAt: number;
+}
+
 export interface SkillSearchResult {
   skill: Skill;
   score: number;

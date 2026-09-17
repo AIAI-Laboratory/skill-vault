@@ -1,6 +1,6 @@
 import { AdapterRegistry } from '../adapters/registry';
 import { AIAdapter, ComposerHandle, TextRange } from '../adapters/types';
-import { PageContext, Skill } from '../domain/types';
+import { PageContext, Skill, SkillVaultSettings } from '../domain/types';
 import { renderPromptTemplate } from '../domain/variable';
 import { sendExtensionMessage } from '../infrastructure/messaging/client';
 import { parseSlashCommand } from './slash/parser';
@@ -13,6 +13,16 @@ export class ContentRuntime {
   private palette: PaletteUI;
   private activeSlashRange: TextRange | null = null;
   private disposeObserver: (() => void) | null = null;
+  private disposed = false;
+
+  private handleSettingsChange = (
+    changes: Record<string, chrome.storage.StorageChange>,
+    area: string
+  ) => {
+    if (area !== 'local') return;
+    const theme = (changes.settings?.newValue as Partial<SkillVaultSettings> | undefined)?.theme;
+    if (theme === 'dark' || theme === 'light' || theme === 'system') this.palette.setTheme(theme);
+  };
 
   constructor() {
     this.palette = new PaletteUI({
@@ -24,6 +34,7 @@ export class ContentRuntime {
   }
 
   init() {
+    this.disposed = false;
     const context: PageContext = {
       url: window.location.href,
       hostname: window.location.hostname,
@@ -34,6 +45,15 @@ export class ContentRuntime {
     if (!this.activeAdapter || this.activeAdapter.match(context) === 0) {
       // Not a supported AI site, do not attach
       return;
+    }
+
+    void sendExtensionMessage('SETTINGS_GET')
+      .then((settings) => {
+        if (!this.disposed) this.palette.setTheme(settings.theme);
+      })
+      .catch(() => {});
+    if (typeof chrome !== 'undefined') {
+      chrome.storage?.onChanged?.addListener(this.handleSettingsChange);
     }
 
     // Attach composer lifecycle observer
@@ -144,6 +164,10 @@ export class ContentRuntime {
   }
 
   dispose() {
+    this.disposed = true;
+    if (typeof chrome !== 'undefined') {
+      chrome.storage?.onChanged?.removeListener(this.handleSettingsChange);
+    }
     if (this.disposeObserver) {
       this.disposeObserver();
       this.disposeObserver = null;

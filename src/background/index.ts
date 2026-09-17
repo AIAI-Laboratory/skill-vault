@@ -1,11 +1,13 @@
 import { SkillRepository } from '../infrastructure/storage/repository';
 import { initContextMenu, setupContextMenuListener } from './context-menu';
 import { setupMessageRouter } from './message-router';
+import { setupTrashCleanup } from './trash-cleanup';
+import { enqueueTask } from './task-queue';
 
 // Initialize repository and default skills on install/update
 chrome.runtime.onInstalled.addListener(async () => {
   const repository = SkillRepository.getInstance();
-  await repository.init();
+  await enqueueTask(() => repository.init());
   initContextMenu();
 
   // Set sidepanel behavior if available (Chrome 116+)
@@ -27,6 +29,7 @@ chrome.runtime.onStartup.addListener(() => {
 // (CRITICAL for Manifest V3: listeners must be registered synchronously during script evaluation)
 setupContextMenuListener();
 setupMessageRouter();
+setupTrashCleanup();
 
 // Ensure context menu item is registered
 initContextMenu();

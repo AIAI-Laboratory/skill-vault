@@ -1,5 +1,6 @@
 import { build } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -31,7 +32,7 @@ async function runBuild() {
   console.log('[1/3] Building Side Panel...');
   await build({
     configFile: false,
-    plugins: [react()],
+    plugins: [react(), tailwindcss()],
     root: path.join(rootDir, 'src', 'sidepanel'),
     base: './',
     build: {

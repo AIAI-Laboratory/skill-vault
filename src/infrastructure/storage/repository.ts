@@ -5,9 +5,12 @@ import {
   SkillSearchResult,
   SkillVaultSettings,
   DEFAULT_SETTINGS,
+  TrashedSkill,
 } from '../../domain/types';
 import { createSkillEntity, validateSkill, CURRENT_SCHEMA_VERSION } from '../../domain/skill';
 import { SEED_SKILLS } from './seed-data';
+
+export const TRASH_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 export interface StorageBackend {
   get(keys: string | string[]): Promise<Record<string, any>>;
@@ -19,9 +22,7 @@ export interface StorageBackend {
 class ChromeStorageBackend implements StorageBackend {
   async get(keys: string | string[]): Promise<Record<string, any>> {
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      return new Promise((resolve) => {
-        chrome.storage.local.get(keys, (res) => resolve(res || {}));
-      });
+      return chrome.storage.local.get(keys);
     }
     // Fallback for tests or web environment
     const result: Record<string, any> = {};
@@ -41,9 +42,7 @@ class ChromeStorageBackend implements StorageBackend {
 
   async set(items: Record<string, any>): Promise<void> {
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      return new Promise((resolve) => {
-        chrome.storage.local.set(items, () => resolve());
-      });
+      return chrome.storage.local.set(items);
     }
     for (const [k, v] of Object.entries(items)) {
       localStorage.setItem(`sv:${k}`, JSON.stringify(v));
@@ -52,9 +51,7 @@ class ChromeStorageBackend implements StorageBackend {
 
   async remove(keys: string | string[]): Promise<void> {
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      return new Promise((resolve) => {
-        chrome.storage.local.remove(keys, () => resolve());
-      });
+      return chrome.storage.local.remove(keys);
     }
     const keyArray = Array.isArray(keys) ? keys : [keys];
     for (const k of keyArray) {
@@ -143,6 +140,13 @@ export class SkillRepository {
       throw new Error(validation.errors.join(', '));
     }
 
+    if (input.id) {
+      const trash = await this.listTrash();
+      if ((await this.get(input.id)) || trash.some((entry) => entry.skill.id === input.id)) {
+        throw new Error(`Skill with ID '${input.id}' already exists in the vault or trash`);
+      }
+    }
+
     // Check unique shortcut
     if (input.shortcut) {
       const existing = await this.findByShortcut(input.shortcut);
@@ -207,17 +211,65 @@ export class SkillRepository {
   }
 
   /**
-   * Deletes a skill.
+   * Moves a skill to trash for 24 hours, preserving its full contents for restoration.
    */
   async remove(id: string): Promise<void> {
-    const indexData = await this.backend.get('skill:index');
-    const index: string[] = indexData['skill:index'] || [];
-    const newIndex = index.filter((item) => item !== id);
+    const skill = await this.get(id);
+    if (!skill) return;
+    const data = await this.backend.get(['skill:index', 'skill:trash']);
+    const index: string[] = data['skill:index'] || [];
+    const trash: TrashedSkill[] = data['skill:trash'] || [];
+    const deletedAt = Date.now();
 
-    await this.backend.remove(`skill:${id}`);
+    // Save the recoverable copy and remove the active content in the same storage write.
     await this.backend.set({
-      'skill:index': newIndex,
+      [`skill:${id}`]: null,
+      'skill:index': index.filter((item) => item !== id),
+      'skill:trash': [
+        { skill, deletedAt, expiresAt: deletedAt + TRASH_RETENTION_MS },
+        ...trash.filter((entry) => entry.skill.id !== id),
+      ],
     });
+  }
+
+  async purgeExpiredTrash(): Promise<TrashedSkill[]> {
+    const data = await this.backend.get('skill:trash');
+    const trash: TrashedSkill[] = data['skill:trash'] || [];
+    const now = Date.now();
+    const remaining = trash.filter((entry) => entry.expiresAt > now);
+    if (remaining.length !== trash.length) {
+      // Remove the empty active slots too; the recoverable contents live only in trash.
+      await this.backend.remove(
+        trash.filter((entry) => entry.expiresAt <= now).map((entry) => `skill:${entry.skill.id}`)
+      );
+      await this.backend.set({ 'skill:trash': remaining });
+    }
+    return remaining;
+  }
+
+  async listTrash(): Promise<TrashedSkill[]> {
+    return this.purgeExpiredTrash();
+  }
+
+  async restore(id: string): Promise<Skill> {
+    const trash = await this.listTrash();
+    const entry = trash.find((item) => item.skill.id === id);
+    if (!entry) throw new Error('This skill is no longer in trash');
+    if (await this.get(id)) throw new Error('A skill with this ID already exists');
+
+    const skill = { ...entry.skill };
+    // A new skill may have claimed this shortcut while the original was in trash.
+    if (skill.shortcut && (await this.findByShortcut(skill.shortcut))) {
+      skill.shortcut = undefined;
+    }
+    const data = await this.backend.get('skill:index');
+    const index: string[] = data['skill:index'] || [];
+    await this.backend.set({
+      [`skill:${id}`]: skill,
+      'skill:index': [id, ...index.filter((item) => item !== id)],
+      'skill:trash': trash.filter((item) => item.skill.id !== id),
+    });
+    return skill;
   }
 
   /**
