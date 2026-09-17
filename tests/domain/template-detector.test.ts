@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { skillMarkdown } from '../fixtures/skill-markdown';
 import {
   decodeHtmlEntities,
   stripLineNumbers,
@@ -64,6 +65,116 @@ describe('template-detector', () => {
   });
 
   describe('Format Detection (detectFormat)', () => {
+    it.each([' ', '\t', '\u00a0'])(
+      'reads skill metadata when selection line breaks become %j',
+      (separator) => {
+        const selection = skillMarkdown.replace(/\n/g, separator);
+        const result = processAndDetect(selection);
+        expect(result.formatInfo.formatLabel).toBe('Skill Markdown');
+        expect(result.primaryTemplate.name).toBe('codebase-replication');
+        expect(result.primaryTemplate.description).toBe(
+          'Learn conventions from a source repository and apply them to a target repository.'
+        );
+        expect(result.primaryTemplate.shortcut).toBe('codebase-replication');
+        expect(result.primaryTemplate.content).toBe(selection);
+      }
+    );
+
+    it.each([
+      '--- name: codebase-replication description: Learn from source. --- # Instructions',
+      '---\nname: codebase-replication description: Learn from source.\n---\n# Instructions',
+      '--- description: Learn from source. name: codebase-replication --- # Instructions',
+      '--- name: "codebase-replication" description: "Learn from source." --- # Instructions',
+      "--- name: 'codebase-replication' description: 'Learn from source.' --- # Instructions",
+      '--- name: codebase-replication description: >- Learn from source. --- # Instructions',
+      '--- name: codebase-replication description: Learn from source. license: MIT --- # Instructions',
+    ])('reads collapsed frontmatter: %s', (selection) => {
+      const result = processAndDetect(selection);
+      expect(result.formatInfo.formatLabel).toBe('Skill Markdown');
+      expect(result.primaryTemplate.name).toBe('codebase-replication');
+      expect(result.primaryTemplate.description).toBe('Learn from source.');
+      expect(result.primaryTemplate.content).toBe(selection);
+    });
+
+    it('extracts the long description before the body in a flattened GitHub selection', () => {
+      const description =
+        "Learn advanced coding rules, syntax idioms, design patterns, file management, and tooling conventions from a source repository and apply them to the user's repository as a reusable rules file plus reusable knowledge pack.";
+      const selection = `--- name: codebase-replication description: ${description} --- # Codebase Replication Learn evidenced conventions from a source repo. ## Checklist Do not copy import os or from pathlib import Path blindly.`;
+      const result = processAndDetect(selection);
+      expect(result.formatInfo.formatLabel).toBe('Skill Markdown');
+      expect(result.primaryTemplate.name).toBe('codebase-replication');
+      expect(result.primaryTemplate.description).toBe(description);
+      expect(result.primaryTemplate.content).toBe(selection);
+    });
+
+    it.each([
+      '--- name: incomplete description: No closing delimiter',
+      'Article --- name: example description: Not leading frontmatter ---',
+      '--- title: Example --- Body mentions name: example description: Outside frontmatter',
+    ])('does not infer skill metadata outside closed leading frontmatter: %s', (selection) => {
+      expect(processAndDetect(selection).formatInfo.skillMetadata).toBeUndefined();
+    });
+
+    it('prioritizes skill frontmatter over SQL, code, and error examples', () => {
+      const result = processAndDetect(skillMarkdown);
+      expect(result.formatInfo.format).toBe('prompt');
+      expect(result.formatInfo.formatLabel).toBe('Skill Markdown');
+      expect(result.primaryTemplate.name).toBe('codebase-replication');
+      expect(result.primaryTemplate.shortcut).toBe('codebase-replication');
+      expect(result.primaryTemplate.description).toBe(
+        'Learn conventions from a source repository and apply them to a target repository.'
+      );
+      expect(result.primaryTemplate.content).toBe(skillMarkdown);
+    });
+
+    it.each([
+      [
+        '"codebase-replication"',
+        '"Learn from source: keep conventions."',
+        'Learn from source: keep conventions.',
+      ],
+      [
+        "'codebase-replication'",
+        "'Learn from source''s conventions.'",
+        "Learn from source's conventions.",
+      ],
+      [
+        'codebase-replication',
+        '>\n  Learn from source\n  and apply conventions.',
+        'Learn from source and apply conventions.',
+      ],
+      [
+        'codebase-replication',
+        '|\n  Learn from source\n  and apply conventions.',
+        'Learn from source\nand apply conventions.',
+      ],
+    ])('reads skill metadata from %s / %s', (name, description, expectedDescription) => {
+      const raw = `---\nname: ${name}\ndescription: ${description}\n---\n\n# Instructions`;
+      const result = processAndDetect(raw);
+      expect(result.primaryTemplate.name).toBe('codebase-replication');
+      expect(result.primaryTemplate.description).toBe(expectedDescription);
+      expect(result.primaryTemplate.content).toBe(raw);
+    });
+
+    it('does not classify prose containing common SQL words as SQL', () => {
+      const raw =
+        'Learn conventions from a source repo. Record where they came from and join the findings.';
+      expect(processAndDetect(raw).formatInfo.format).toBe('text');
+    });
+
+    it.each([
+      'WITH active AS (SELECT * FROM users) SELECT * FROM active;',
+      'INSERT INTO users (id) VALUES (1);',
+      'UPDATE users SET active = 1;',
+      'DELETE FROM users WHERE id = 1;',
+      'CREATE TABLE users (id INT);',
+      'ALTER TABLE users ADD email TEXT;',
+      'DROP TABLE users;',
+      '```sql\nSELECT 1;\n```',
+    ])('still detects actual SQL: %s', (raw) => {
+      expect(processAndDetect(raw).formatInfo.format).toBe('sql');
+    });
+
     it('detects AI prompt in English starting with "You are a..."', () => {
       const text =
         'You are a Principal Software Architect. Review this system design for scalability and fault tolerance.';

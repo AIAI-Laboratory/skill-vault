@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="210 90 830 830" role="img" aria-labelledby="title">
+  <title id="title">Skill Vault</title>
+  <!-- Three faces of the vault, with transparent seams and background. -->
+  <g fill="#080808">
+    <path d="M610 116Q626 107 642 116L953 286Q970 296 953 307L641 483Q626 493 611 484L300 308Q282 298 300 287Z"/>
+    <path d="M280 331L599 507Q612 515 612 530L611 886Q611 906 594 897L277 714Q263 706 263 692V344Q263 322 280 331Z"/>
+    <path d="M972 331Q989 322 989 343V692Q989 706 975 714L657 896Q640 906 640 887V530Q640 515 654 507Z"/>
+  </g>
+  <!-- Idea bulb. -->
+  <g fill="#ff3828">
+    <path d="M585 383C583 354 550 351 544 317C534 272 575 232 625 232C676 232 716 271 708 315C702 350 670 354 667 383Z"/>
+    <rect x="585" y="395" width="82" height="21" rx="7"/>
+    <path d="M598 428H654C649 454 604 454 598 428Z"/>
+  </g>
+  <path d="M626 170V205M485 241L521 259M731 259L767 241" fill="none" stroke="#ff3828" stroke-width="22" stroke-linecap="round"/>
+  <!-- Angled combination dial and its raised center. -->
+  <path fill="#fff" d="M405 464C469 461 533 527 551 608C571 694 532 769 473 770C405 774 336 711 314 632C291 552 334 465 405 464Z"/>
+  <path fill="#080808" d="M413 530C453 529 487 571 494 617C502 665 480 701 448 703C433 704 421 702 410 698C443 690 452 652 437 616C423 581 391 553 357 572C367 546 386 530 413 530Z"/>
+  <path fill="#080808" d="M372 581C396 579 419 605 425 635C432 665 420 688 399 689C375 691 350 668 344 640C336 610 348 584 372 581Z"/>
+  <g fill="none" stroke="#080808" stroke-width="11" stroke-linecap="round">
+    <path d="M375 492L383 510M339 529L349 541M326 586L335 589M492 528L484 539M515 596L527 590M524 651L537 656M508 700L520 714M473 729L480 745M428 728V744M382 705L377 712"/>
+  </g>
+  <path d="M434 493V539" fill="none" stroke="#ff3828" stroke-width="18" stroke-linecap="round"/>
+</svg>

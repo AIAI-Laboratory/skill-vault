@@ -36,6 +36,7 @@ export interface DetectedFormatInfo {
   codeLanguage?: DetectedCodeLanguage;
   details?: string;
   roleHint?: string;
+  skillMetadata?: { name: string; description: string };
 }
 
 export interface TemplateOption {
@@ -215,6 +216,66 @@ function normalizeCodeLanguage(lang: string): DetectedCodeLanguage {
   return 'generic';
 }
 
+function readMetadataScalar(value: string): string {
+  if (value.startsWith('"') && value.endsWith('"')) {
+    try {
+      return JSON.parse(value) as string;
+    } catch {
+      return value.slice(1, -1);
+    }
+  }
+  if (value.startsWith("'") && value.endsWith("'")) {
+    return value.slice(1, -1).replace(/''/g, "'");
+  }
+  return value.replace(/\s+#.*$/, '').trim();
+}
+
+// Context-menu selections can flatten the rendered GitHub code lines into spaces.
+// Recover metadata only inside a closed leading frontmatter block; never rewrite
+// the selection or infer fields from the document body.
+function readCollapsedSkillMetadata(text: string): DetectedFormatInfo['skillMetadata'] {
+  const frontmatter = text.match(/^---\s+([\s\S]*?)\s+---(?=\s|$)/);
+  if (!frontmatter) return undefined;
+
+  const fieldPattern =
+    /(?:^|\s)(name|description):\s+("(?:\\.|[^"\\])*"|'(?:''|[^'])*'|[\s\S]*?)(?=\s+(?:name|description|license|compatibility|metadata|allowed-tools|argument-hint|disable-model-invocation|user-invocable):(?:\s|$)|$)/g;
+  const fields: Record<string, string> = {};
+  for (const match of frontmatter[1].matchAll(fieldPattern)) {
+    const value = match[2].trim().replace(/^[>|][-+]?\s+/, '');
+    fields[match[1]] = readMetadataScalar(value);
+  }
+  return fields.name && fields.description
+    ? { name: fields.name, description: fields.description }
+    : undefined;
+}
+
+// Read only the display fields we need; leave the source document untouched.
+// This intentionally does not interpret YAML objects, tags, or aliases.
+function readSkillMetadata(text: string): DetectedFormatInfo['skillMetadata'] {
+  const frontmatter = text.match(/^---\s*\n([\s\S]*?)\n---[ \t]*(?:\n|$)/);
+  if (!frontmatter) return readCollapsedSkillMetadata(text);
+
+  const lines = frontmatter[1].split('\n');
+  const readField = (key: string): string => {
+    const index = lines.findIndex((line) => line.startsWith(`${key}:`));
+    if (index < 0) return '';
+    const value = lines[index].slice(key.length + 1).trim();
+    if (/^[>|][-+]?\s*$/.test(value)) {
+      const continuation: string[] = [];
+      for (let i = index + 1; i < lines.length; i++) {
+        if (lines[i].trim() && !/^\s/.test(lines[i])) break;
+        continuation.push(lines[i].trim());
+      }
+      return continuation.join(value.startsWith('>') ? ' ' : '\n').trim();
+    }
+    return readMetadataScalar(value);
+  };
+
+  const name = readField('name');
+  const description = readField('description');
+  return name && description ? { name, description } : readCollapsedSkillMetadata(text);
+}
+
 /**
  * 2. FORMAT DETECTION PHASE
  * Analyzes pre-processed content to accurately classify its format.
@@ -226,6 +287,19 @@ export function detectFormat(preprocessed: PreprocessedContent): DetectedFormatI
       format: 'text',
       formatLabel: 'Text / Empty',
       confidence: 1,
+    };
+  }
+
+  // Skill documents can contain SQL, code, and stack traces as examples.
+  // Their frontmatter takes precedence over heuristics for those examples.
+  const skillMetadata = readSkillMetadata(text);
+  if (skillMetadata) {
+    return {
+      format: 'prompt',
+      formatLabel: 'Skill Markdown',
+      confidence: 0.99,
+      skillMetadata,
+      details: 'Skill instructions with name and description frontmatter',
     };
   }
 
@@ -317,13 +391,8 @@ export function detectFormat(preprocessed: PreprocessedContent): DetectedFormatI
 
   // --- D. Detect SQL ---
   const sqlKeywordsRegex =
-    /^\s*(?:WITH\s+[a-zA-Z0-9_]+\s+AS\s*\(|SELECT\s+[\s\S]+?\s+FROM|INSERT\s+INTO\s+|UPDATE\s+[a-zA-Z0-9_.]+\s+SET|DELETE\s+FROM|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE)\b/i;
-  const sqlClauses = (
-    text.match(
-      /\b(SELECT|FROM|WHERE|JOIN|LEFT JOIN|INNER JOIN|GROUP BY|ORDER BY|HAVING|LIMIT)\b/gi
-    ) || []
-  ).length;
-  if (sqlKeywordsRegex.test(text) || sqlClauses >= 3) {
+    /^\s*(?:WITH\s+(?:RECURSIVE\s+)?[a-zA-Z0-9_]+\s+AS\s*\(|SELECT\s+[^;]+?\s+FROM\b|INSERT\s+INTO\s+|UPDATE\s+[a-zA-Z0-9_.]+\s+SET\b|DELETE\s+FROM\b|CREATE\s+TABLE\b|ALTER\s+TABLE\b|DROP\s+TABLE\b)/i;
+  if (preprocessed.detectedLanguageHint === 'sql' || sqlKeywordsRegex.test(text)) {
     return {
       format: 'sql',
       formatLabel: 'SQL Query',
@@ -544,7 +613,7 @@ export function detectTemplate(
   formatInfo: DetectedFormatInfo,
   meta?: { url?: string; title?: string }
 ): DetectionResult {
-  const { format, codeLanguage, roleHint } = formatInfo;
+  const { format, codeLanguage, roleHint, skillMetadata } = formatInfo;
   const text = preprocessed.cleanedText;
 
   const templates: TemplateOption[] = [];
@@ -557,7 +626,11 @@ export function detectTemplate(
     let shortcut = 'prompt';
     let desc = 'Reusable AI instruction and prompt skill';
 
-    if (roleHint) {
+    if (skillMetadata) {
+      skillName = skillMetadata.name;
+      shortcut = slugify(skillName, 32);
+      desc = skillMetadata.description;
+    } else if (roleHint) {
       const cleanRole = roleHint
         .replace(/[,.:].*$/, '')
         .trim()
@@ -584,7 +657,7 @@ export function detectTemplate(
       name: skillName,
       shortcut: isValidShortcut(shortcut).valid ? shortcut : 'custom-prompt',
       description: desc,
-      content: text,
+      content: skillMetadata ? preprocessed.originalText : text,
       tags: ['prompt', 'custom', 'ai'],
       isPrimary: true,
     });

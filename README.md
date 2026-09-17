@@ -31,7 +31,7 @@ Skill Vault is a Manifest V3 Chrome Extension that bridges the gap between your 
 # Install dependencies
 npm install
 
-# Generate icons from logo
+# Generate PNG icons from public/icons/icon.svg
 npm run generate-icons
 
 # Run test suite

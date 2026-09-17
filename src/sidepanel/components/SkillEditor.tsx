@@ -143,7 +143,11 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
         <div className="format-detection-banner">
           <div className="format-badge-row">
             <span className="format-badge">✨ {activeFormatInfo.formatLabel}</span>
-            <span className="format-subtext">Pre-processed & template auto-filled</span>
+            <span className="format-subtext">
+              {activeFormatInfo.selectedTemplateId === 'original_selection'
+                ? 'Original selection preserved'
+                : 'Template applied'}
+            </span>
           </div>
 
           {activeFormatInfo.templateOptions && activeFormatInfo.templateOptions.length > 1 && (

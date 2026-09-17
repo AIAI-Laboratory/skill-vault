@@ -5,6 +5,7 @@
   "description": "Universal local-first skill and prompt layer for AI chat on the web",
   "type": "module",
   "scripts": {
+    "generate-icons": "node scripts/generate-icons.mjs",
     "dev": "vite",
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
