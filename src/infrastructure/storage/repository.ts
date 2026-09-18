@@ -1,3 +1,4 @@
+import { normalizeProviderUrls } from '../../domain/custom-provider';
 import {
   Skill,
   CreateSkillInput,
@@ -390,6 +391,7 @@ export class SkillRepository {
   async updateSettings(patch: Partial<SkillVaultSettings>): Promise<SkillVaultSettings> {
     const current = await this.getSettings();
     const updated = { ...current, ...patch };
+    updated.customProviderUrls = normalizeProviderUrls(updated.customProviderUrls);
     await this.backend.set({ settings: updated });
     return updated;
   }

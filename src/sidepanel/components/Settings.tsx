@@ -1,5 +1,9 @@
+import { normalizeProviderUrl, providerMatchPattern } from '../../domain/custom-provider';
+import { Input } from '@/components/ui/input';
 import { useRef, useState } from 'react';
 import {
+  Plus,
+  Trash2,
   Download,
   Upload,
   ShieldCheck,
@@ -23,6 +27,7 @@ import {
 import {
   Field,
   FieldContent,
+  FieldError,
   FieldDescription,
   FieldGroup,
   FieldLabel,
@@ -59,10 +64,43 @@ export function Settings({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [importing, setImporting] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [providerUrl, setProviderUrl] = useState('');
+  const [providerError, setProviderError] = useState('');
+  const [providerNotice, setProviderNotice] = useState('');
   const update = async (patch: Partial<SkillVaultSettings>) => {
     setUpdating(true);
     try {
       await onUpdateSettings(patch);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const addProvider = async () => {
+    setProviderError('');
+    setProviderNotice('');
+    setUpdating(true);
+    try {
+      const origin = normalizeProviderUrl(providerUrl);
+      if (settings.customProviderUrls.includes(origin)) {
+        throw new Error('This provider URL is already added.');
+      }
+      // Request directly from the submit gesture, before any asynchronous work.
+      if (typeof chrome !== 'undefined' && chrome.permissions?.request) {
+        const granted = await chrome.permissions.request({
+          origins: [providerMatchPattern(origin)],
+        });
+        if (!granted)
+          throw new Error('Site access was not granted. Try again to enable this provider.');
+      }
+      await onUpdateSettings({ customProviderUrls: [...settings.customProviderUrls, origin] });
+      setProviderUrl('');
+      setProviderNotice('Provider added. Reload its chat page to start using /skill.');
+    } catch (error) {
+      setProviderError(error instanceof Error ? error.message : 'Could not add provider.');
     } finally {
       setUpdating(false);
     }
@@ -126,6 +164,80 @@ export function Settings({
                 </div>
               ))}
             </FieldGroup>
+          </FieldSet>
+          <Separator className="my-5" />
+          <FieldSet>
+            <FieldLegend>Custom providers</FieldLegend>
+            <FieldDescription>
+              Add a chat website URL. Applies to all pages on that origin, using standard text areas
+              or editable chat inputs.
+            </FieldDescription>
+            <FieldGroup>
+              {settings.customProviderUrls.map((url) => (
+                <Field key={url} orientation="horizontal" data-disabled={updating}>
+                  <FieldContent className="min-w-0">
+                    <FieldDescription className="break-all">{url}</FieldDescription>
+                  </FieldContent>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Remove ${url}`}
+                    disabled={updating}
+                    onClick={() => {
+                      setProviderNotice('');
+                      void update({
+                        customProviderUrls: settings.customProviderUrls.filter(
+                          (item) => item !== url
+                        ),
+                      });
+                    }}
+                  >
+                    <Trash2 data-icon="inline-start" />
+                  </Button>
+                </Field>
+              ))}
+            </FieldGroup>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void addProvider();
+              }}
+            >
+              <FieldGroup>
+                <Field data-invalid={!!providerError} data-disabled={updating}>
+                  <FieldLabel htmlFor="custom-provider-url">Provider URL</FieldLabel>
+                  <Input
+                    id="custom-provider-url"
+                    type="url"
+                    placeholder="https://chat.example.com"
+                    value={providerUrl}
+                    disabled={updating}
+                    required
+                    aria-invalid={!!providerError}
+                    aria-describedby={providerError ? 'custom-provider-error' : undefined}
+                    onChange={(event) => {
+                      setProviderUrl(event.target.value);
+                      setProviderError('');
+                    }}
+                  />
+                  {providerError && (
+                    <FieldError id="custom-provider-error">{providerError}</FieldError>
+                  )}
+                </Field>
+                <Button type="submit" variant="outline" disabled={updating || !providerUrl.trim()}>
+                  {updating ? (
+                    <Spinner data-icon="inline-start" />
+                  ) : (
+                    <Plus data-icon="inline-start" />
+                  )}
+                  Add provider
+                </Button>
+                {providerNotice && (
+                  <FieldDescription role="status">{providerNotice}</FieldDescription>
+                )}
+              </FieldGroup>
+            </form>
           </FieldSet>
         </CardContent>
       </Card>

@@ -45,6 +45,21 @@ describe('SkillRepository with Mock Storage', () => {
 
   afterEach(() => vi.useRealTimers());
 
+  it('loads old settings and persists normalized custom providers', async () => {
+    await backend.set({ settings: { enableChatGPT: false } });
+    expect((await repo.getSettings()).customProviderUrls).toEqual([]);
+    await repo.updateSettings({ customProviderUrls: ['https://CHAT.example.com/thread'] });
+    const reopened = new SkillRepository(backend);
+    expect(await reopened.getSettings()).toMatchObject({
+      enableChatGPT: false,
+      customProviderUrls: ['https://chat.example.com'],
+    });
+    await expect(
+      repo.updateSettings({ customProviderUrls: ['file:///tmp/chat'] })
+    ).rejects.toThrow();
+    expect((await reopened.getSettings()).customProviderUrls).toEqual(['https://chat.example.com']);
+  });
+
   it('retains the full skill in trash but excludes it from active reads and backups', async () => {
     const skill = (await repo.list())[0];
     await repo.remove(skill.id);

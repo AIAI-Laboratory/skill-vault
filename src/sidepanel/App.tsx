@@ -499,6 +499,7 @@ export const App: React.FC = () => {
                       showToast('Settings saved');
                     } catch (err) {
                       showToast(err instanceof Error ? err.message : 'Could not save settings');
+                      throw err;
                     }
                   }}
                   onExport={handleExport}

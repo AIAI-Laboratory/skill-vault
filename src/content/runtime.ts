@@ -14,14 +14,19 @@ export class ContentRuntime {
   private activeSlashRange: TextRange | null = null;
   private disposeObserver: (() => void) | null = null;
   private disposed = false;
+  private disposeComposer: (() => void) | null = null;
+  private settingsRevision = 0;
 
   private handleSettingsChange = (
     changes: Record<string, chrome.storage.StorageChange>,
     area: string
   ) => {
     if (area !== 'local') return;
-    const theme = (changes.settings?.newValue as Partial<SkillVaultSettings> | undefined)?.theme;
-    if (theme === 'dark' || theme === 'light' || theme === 'system') this.palette.setTheme(theme);
+    const settings = changes.settings?.newValue as SkillVaultSettings | undefined;
+    if (settings) {
+      this.settingsRevision++;
+      this.applySettings(settings);
+    }
   };
 
   constructor() {
@@ -35,26 +40,33 @@ export class ContentRuntime {
 
   init() {
     this.disposed = false;
+    chrome.storage?.onChanged?.addListener(this.handleSettingsChange);
+    const revision = this.settingsRevision;
+    void sendExtensionMessage('SETTINGS_GET')
+      .then((settings) => {
+        if (!this.disposed && revision === this.settingsRevision) this.applySettings(settings);
+      })
+      .catch(() => {});
+  }
+
+  private applySettings(settings: SkillVaultSettings) {
+    if (this.disposed) return;
+    this.palette.setTheme(settings.theme);
     const context: PageContext = {
       url: window.location.href,
       hostname: window.location.hostname,
       title: document.title,
     };
-
-    this.activeAdapter = this.registry.getBestAdapter(context);
-    if (!this.activeAdapter || this.activeAdapter.match(context) === 0) {
-      // Not a supported AI site, do not attach
-      return;
-    }
-
-    void sendExtensionMessage('SETTINGS_GET')
-      .then((settings) => {
-        if (!this.disposed) this.palette.setTheme(settings.theme);
-      })
-      .catch(() => {});
-    if (typeof chrome !== 'undefined') {
-      chrome.storage?.onChanged?.addListener(this.handleSettingsChange);
-    }
+    const adapter = this.registry.getBestAdapter(context, settings);
+    if (adapter === this.activeAdapter) return;
+    this.disposeObserver?.();
+    this.disposeObserver = null;
+    this.disposeComposer?.();
+    this.disposeComposer = null;
+    this.currentComposer = null;
+    this.palette.close();
+    this.activeAdapter = adapter;
+    if (!this.activeAdapter) return;
 
     // Attach composer lifecycle observer
     this.disposeObserver = this.activeAdapter.observeComposer((composer) => {
@@ -69,22 +81,35 @@ export class ContentRuntime {
   }
 
   private attachToComposer(composer: ComposerHandle | null) {
-    if (!composer || composer.element === this.currentComposer?.element) {
+    if (composer?.element === this.currentComposer?.element) return;
+    this.disposeComposer?.();
+    this.disposeComposer = null;
+    if (!composer) {
+      this.currentComposer = null;
+      this.palette.close();
       return;
     }
 
     this.currentComposer = composer;
     const el = composer.element;
 
-    el.addEventListener('input', () => this.handleInput());
-    el.addEventListener('keydown', (e) => this.handleKeyDown(e), true);
-    el.addEventListener('blur', () => {
+    const onInput = () => void this.handleInput();
+    const onKeyDown = (e: KeyboardEvent) => this.handleKeyDown(e);
+    const onBlur = () => {
       // Delay closing to allow click events inside palette to register
       setTimeout(() => {
         if (!this.palette.isPaletteOpen()) return;
         this.palette.close();
       }, 250);
-    });
+    };
+    el.addEventListener('input', onInput);
+    el.addEventListener('keydown', onKeyDown, true);
+    el.addEventListener('blur', onBlur);
+    this.disposeComposer = () => {
+      el.removeEventListener('input', onInput);
+      el.removeEventListener('keydown', onKeyDown, true);
+      el.removeEventListener('blur', onBlur);
+    };
   }
 
   private handleKeyDown(e: KeyboardEvent) {
@@ -98,6 +123,7 @@ export class ContentRuntime {
 
   private async handleInput() {
     if (!this.activeAdapter) return;
+    const adapter = this.activeAdapter;
 
     const caretContext = this.activeAdapter.getCaretContext?.();
     const textBefore = caretContext ? caretContext.textBefore : this.activeAdapter.readComposer();
@@ -109,7 +135,7 @@ export class ContentRuntime {
 
       try {
         const results = await sendExtensionMessage('SKILL_SEARCH', { query: slashResult.query });
-        if (this.currentComposer) {
+        if (!this.disposed && this.activeAdapter === adapter && this.currentComposer) {
           if (!this.palette.isPaletteOpen()) {
             this.palette.open(this.currentComposer.element, slashResult.query, results);
           } else {
@@ -165,6 +191,8 @@ export class ContentRuntime {
 
   dispose() {
     this.disposed = true;
+    this.disposeComposer?.();
+    this.disposeComposer = null;
     if (typeof chrome !== 'undefined') {
       chrome.storage?.onChanged?.removeListener(this.handleSettingsChange);
     }

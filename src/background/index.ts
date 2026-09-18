@@ -1,3 +1,4 @@
+import { setupCustomProviders } from './custom-providers';
 import { SkillRepository } from '../infrastructure/storage/repository';
 import { initContextMenu, setupContextMenuListener } from './context-menu';
 import { setupMessageRouter } from './message-router';
@@ -33,3 +34,5 @@ setupTrashCleanup();
 
 // Ensure context menu item is registered
 initContextMenu();
+
+setupCustomProviders();

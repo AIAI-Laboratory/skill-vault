@@ -1,3 +1,5 @@
+import { normalizeProviderUrls } from '../domain/custom-provider';
+import { syncCustomProviders } from './custom-providers';
 import { SkillRepository } from '../infrastructure/storage/repository';
 import { ExtensionMessage, ExtensionResponse } from '../infrastructure/messaging/protocol';
 import { enqueueTask } from './task-queue';
@@ -84,6 +86,10 @@ async function handleMessage(msg: ExtensionMessage, repository: SkillRepository)
       return await repository.getSettings();
     }
     case 'SETTINGS_UPDATE': {
+      if (msg.payload?.customProviderUrls !== undefined) {
+        const urls = normalizeProviderUrls(msg.payload.customProviderUrls);
+        await syncCustomProviders(urls);
+      }
       return await repository.updateSettings(msg.payload);
     }
     case 'GET_DRAFT_SKILL': {

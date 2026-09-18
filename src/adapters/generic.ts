@@ -14,7 +14,7 @@ export class GenericAdapter implements AIAdapter {
 
   match(_context: PageContext): number {
     // Low baseline match if any active or visible textarea exists
-    const hasInput = document.querySelector('textarea, div[contenteditable="true"]');
+    const hasInput = document.querySelector('textarea, [contenteditable="true"]');
     return hasInput ? 0.3 : 0;
   }
 
@@ -33,7 +33,7 @@ export class GenericAdapter implements AIAdapter {
     }
 
     // Check visible textareas or contenteditables
-    const el = document.querySelector('textarea, div[contenteditable="true"]') as HTMLElement;
+    const el = document.querySelector('textarea, [contenteditable="true"]') as HTMLElement;
     if (!el) return null;
 
     return {
@@ -189,9 +189,11 @@ export class GenericAdapter implements AIAdapter {
     });
 
     observer.observe(document.body, { childList: true, subtree: true });
+    document.addEventListener('focusin', check);
 
     return () => {
       observer.disconnect();
+      document.removeEventListener('focusin', check);
       clearTimeout(timer);
     };
   }

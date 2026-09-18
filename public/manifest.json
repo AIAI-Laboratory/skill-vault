@@ -5,6 +5,7 @@
   "description": "Universal local-first skill and prompt layer for AI chat on the web",
   "minimum_chrome_version": "116",
   "permissions": ["storage", "contextMenus", "sidePanel", "activeTab", "scripting", "alarms"],
+  "optional_host_permissions": ["https://*/*", "http://*/*"],
   "background": {
     "service_worker": "background.js",
     "type": "module"

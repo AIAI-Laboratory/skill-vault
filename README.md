@@ -61,6 +61,14 @@ npm run build
 - Use variables like `{{selected_text}}`, `{{current_date}}`, `{{page_title}}`, `{{page_url}}`.
 - Click the trash icon to move a skill to **Trash** immediately, without a confirmation dialog. Restore it from the **Trash** tab within 24 hours; after that it is permanently deleted. If the browser is closed or the device is asleep, overdue trash is cleaned up when the extension runs again. Trashed skills are excluded from search, favorites, and JSON backups.
 
+### Custom Chat Providers
+
+Open **Settings → AI connections → Custom providers**, enter an HTTP or HTTPS chat URL, and click **Add provider**. Grant access to that website when the browser asks, then reload the chat page and type `/skill`.
+
+URLs are saved by origin (scheme, hostname, and port); paths, queries, and fragments are removed. Local chat apps such as `http://localhost:3000` are supported. Custom providers use standard textareas and contenteditable inputs; websites with custom editors, shadow-root editors, or embedded frames may need a dedicated adapter. Remove a provider using its trash button to stop the palette on that origin.
+
+After updating an unpacked extension, reload it at `chrome://extensions` before adding providers so Chrome picks up the new optional site permissions.
+
 ### 2. Triggering `/skill` in AI Chats
 
 1. Navigate to [ChatGPT](https://chatgpt.com), [Claude](https://claude.ai), or [Gemini](https://gemini.google.com).
