@@ -79,16 +79,11 @@ describe('context-menu', () => {
     expect(mockStorageLocal.set).toHaveBeenCalledWith({
       'draft:skill': expect.objectContaining({
         rawContent: '  const a = 123;  ',
-        detectedFormat: 'code',
-        formatLabel: 'TypeScript Code',
         suggestedName: 'const a = 123;',
-        suggestedShortcut: 'const-a-123',
-        suggestedTags: ['snippet'],
         url: 'https://example.com/test',
         title: 'Example Page',
         timestamp: expect.any(Number),
         content: '  const a = 123;  ',
-        activeTemplateId: 'original_selection',
       }),
     });
   });
@@ -108,10 +103,7 @@ describe('context-menu', () => {
     expect(mockStorageLocal.set).toHaveBeenCalledWith({
       'draft:skill': expect.objectContaining({
         rawContent: 'hello world',
-        detectedFormat: 'text',
-        formatLabel: 'Text / Article Content',
         suggestedName: 'hello world',
-        suggestedShortcut: 'hello-world',
         url: '',
         title: '',
         timestamp: expect.any(Number),
@@ -121,7 +113,7 @@ describe('context-menu', () => {
   });
 
   it.each([skillMarkdown, skillMarkdown.replace(/\n/g, ' ')])(
-    'imports skill metadata and exact content with or without selection line breaks',
+    'preserves skill Markdown without automatically detecting or applying templates',
     (selection) => {
       handleContextMenuClick({
         menuItemId: CONTEXT_MENU_ID,
@@ -134,13 +126,6 @@ describe('context-menu', () => {
       expect(draft).toMatchObject({
         rawContent: selection,
         content: selection,
-        detectedFormat: 'prompt',
-        formatLabel: 'Skill Markdown',
-        suggestedName: 'codebase-replication',
-        suggestedShortcut: 'codebase-replication',
-        suggestedDescription:
-          'Learn conventions from a source repository and apply them to a target repository.',
-        activeTemplateId: 'original_selection',
       });
     }
   );
@@ -151,7 +136,7 @@ describe('context-menu', () => {
     '```python\ndef example():\n    return 1\n```',
     'You are an architect. Review this design.',
     '# Partial skill selection\n\nLearn from source; record where patterns came from; join the findings.',
-  ])('preserves the selection by default and keeps templates opt-in: %s', (selection) => {
+  ])('preserves the selection without template detection: %s', (selection) => {
     handleContextMenuClick({
       menuItemId: CONTEXT_MENU_ID,
       selectionText: selection,
@@ -159,17 +144,9 @@ describe('context-menu', () => {
 
     const draft = mockStorageLocal.set.mock.calls[0][0]['draft:skill'];
     expect(draft.content).toBe(selection);
-    expect(draft.templateOptions[0]).toMatchObject({
-      id: draft.activeTemplateId,
-      content: selection,
-      isPrimary: true,
-    });
-    expect(draft.templateOptions.length).toBeGreaterThan(1);
-    expect(
-      draft.templateOptions
-        .slice(1)
-        .every((template: { isPrimary: boolean }) => !template.isPrimary)
-    ).toBe(true);
+    expect(draft).not.toHaveProperty('templateOptions');
+    expect(draft).not.toHaveProperty('detectedFormat');
+    expect(draft).not.toHaveProperty('activeTemplateId');
   });
 
   it('handleContextMenuClick ignores clicks when menuItemId is not matching or no selection', () => {
@@ -217,9 +194,8 @@ describe('context-menu', () => {
     const draft = mockStorageLocal.set.mock.calls[0][0]['draft:skill'];
     expect(draft.rawContent).toBe(selection);
     expect(draft.content).toBe(selection);
-    expect(draft.templateOptions[0].content).toBe(selection);
-    expect(draft.suggestedName).toBe('codebase-replication');
-    expect(draft.formatLabel).toBe('Skill Markdown');
+    expect(draft).not.toHaveProperty('templateOptions');
+    expect(draft).not.toHaveProperty('formatLabel');
   });
 
   it.each(['', undefined, 'A different selection'])(

@@ -1,4 +1,4 @@
-import { processAndDetect, slugify, DraftSkill, TemplateOption } from '../domain/template-detector';
+import type { DraftSkill } from '../domain/types';
 import { readPageSelection } from '../content/selection';
 
 export const CONTEXT_MENU_ID = 'save-selection-as-skill';
@@ -87,59 +87,26 @@ export async function handleContextMenuClick(
     }
   }
 
-  // 2. Read the original selection before detecting metadata and storing a draft.
+  // 2. Read the original selection and store a draft without template detection.
   const rawSelection = selectionRequest ? await selectionRequest : info.selectionText;
   if (requestId !== latestSelectionRequest) return;
   const pageUrl = info.pageUrl || tab?.url || '';
   const pageTitle = tab?.title || '';
 
-  const detection = processAndDetect(rawSelection, {
-    url: pageUrl,
-    title: pageTitle,
-  });
-
-  // Saving a selection must never replace it with a generated instruction.
-  // Keep detection useful for metadata and offer transformations as opt-in choices.
-  const sourceName =
-    detection.formatInfo.format === 'prompt'
-      ? detection.primaryTemplate.name
-      : rawSelection
-          .trim()
-          .split(/\r?\n/)[0]
-          .replace(/^#+\s*/, '')
-          .slice(0, 80);
-  const originalTemplate: TemplateOption = {
-    id: 'original_selection',
-    label: 'Original Selection',
-    name: sourceName || pageTitle || 'Saved Selection',
-    shortcut:
-      detection.formatInfo.format === 'prompt'
-        ? detection.primaryTemplate.shortcut
-        : slugify(sourceName || pageTitle || 'saved-selection', 32),
-    description:
-      detection.formatInfo.format === 'prompt' ? detection.primaryTemplate.description : '',
-    content: rawSelection,
-    tags: detection.formatInfo.format === 'prompt' ? detection.primaryTemplate.tags : ['snippet'],
-    isPrimary: true,
-  };
-
   const draft: DraftSkill = {
     rawContent: rawSelection,
-    content: originalTemplate.content,
+    content: rawSelection,
     url: pageUrl,
     title: pageTitle,
     timestamp: Date.now(),
-    detectedFormat: detection.formatInfo.format,
-    formatLabel: detection.formatInfo.formatLabel,
-    suggestedName: originalTemplate.name,
-    suggestedShortcut: originalTemplate.shortcut,
-    suggestedDescription: originalTemplate.description,
-    suggestedTags: originalTemplate.tags,
-    templateOptions: [
-      originalTemplate,
-      ...detection.templates.map((template) => ({ ...template, isPrimary: false })),
-    ],
-    activeTemplateId: originalTemplate.id,
+    suggestedName:
+      rawSelection
+        .trim()
+        .split(/\r?\n/)[0]
+        .replace(/^#+\s*/, '')
+        .slice(0, 80) ||
+      pageTitle ||
+      'Saved Selection',
   };
 
   if (typeof chrome !== 'undefined' && chrome.storage?.local) {

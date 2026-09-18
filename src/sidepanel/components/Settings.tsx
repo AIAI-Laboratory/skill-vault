@@ -1,3 +1,4 @@
+import { GeminiKeySettings } from './GeminiKeySettings';
 import { normalizeProviderUrl, providerMatchPattern } from '../../domain/custom-provider';
 import { Input } from '@/components/ui/input';
 import { useRef, useState } from 'react';
@@ -41,6 +42,8 @@ import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 
 interface SettingsProps {
+  geminiConfigured: boolean;
+  onGeminiKeyChanged: (configured: boolean) => void;
   settings: SkillVaultSettings;
   skills: Skill[];
   onUpdateSettings: (patch: Partial<SkillVaultSettings>) => Promise<void>;
@@ -55,6 +58,8 @@ const providers = [
 ] as const;
 
 export function Settings({
+  geminiConfigured,
+  onGeminiKeyChanged,
   settings,
   skills,
   onUpdateSettings,
@@ -130,6 +135,17 @@ export function Settings({
               </div>
             ))}
           </dl>
+        </CardContent>
+      </Card>
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>Improve by AI</CardTitle>
+          <CardDescription>
+            Lightly improve simple prompts and suggest metadata with Gemini.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <GeminiKeySettings configured={geminiConfigured} onChanged={onGeminiKeyChanged} />
         </CardContent>
       </Card>
       <Card size="sm">
@@ -348,7 +364,8 @@ export function Settings({
         <ShieldCheck />
         <AlertTitle>Your ideas stay yours</AlertTitle>
         <AlertDescription>
-          Skills are stored in this browser. No account, tracking, or cloud sync.
+          Skills are stored in this browser. Improve by AI sends your prompt and library metadata to
+          Gemini only when requested.
         </AlertDescription>
       </Alert>
     </div>

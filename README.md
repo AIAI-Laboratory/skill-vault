@@ -15,7 +15,7 @@
 
 Skill Vault is a Manifest V3 Chrome Extension that bridges the gap between your personal prompt library and web-based AI chat interfaces (**ChatGPT**, **Claude**, **Gemini**).
 
-- 📦 **Local-First Architecture:** All skills and settings are stored directly in your browser (`chrome.storage.local`). Zero analytics, zero tracking, zero server calls.
+- 📦 **Local-First Architecture:** All skills and settings are stored directly in your browser (`chrome.storage.local`). Zero analytics or tracking. Optional AI formatting calls Gemini only when requested.
 - ⚡ **In-Composer `/skill` Palette:** Type `/skill` or `/skill <query>` inside ChatGPT, Claude, or Gemini to trigger a keyboard-driven command palette rendered in an isolated Shadow DOM.
 - 🎯 **Non-Destructive Safe Injection:** Selected skills replace the `/skill` command with your formatted prompt without ever automatically pressing "Send".
 - 📝 **Right-Click to Save:** Highlight any text on any webpage, right-click, and choose **Save selection as Skill** to immediately draft a reusable skill.
@@ -60,6 +60,14 @@ npm run build
 - Click **+ New Skill** to create your own skills with custom shortcuts (e.g., `review`, `explain`, `debug`).
 - Use variables like `{{selected_text}}`, `{{current_date}}`, `{{page_title}}`, `{{page_url}}`.
 - Click the trash icon to move a skill to **Trash** immediately, without a confirmation dialog. Restore it from the **Trash** tab within 24 hours; after that it is permanently deleted. If the browser is closed or the device is asleep, overdue trash is cleaned up when the extension runs again. Trashed skills are excluded from search, favorites, and JSON backups.
+
+### Improve by AI with Gemini
+
+Open **Settings → Improve by AI** to save a Gemini API key, or click **Add API key** near the bottom of the skill editor. Allow access to the Gemini API when Chrome asks. Keys are stored locally, separately from settings and JSON backups, and can be replaced or removed there.
+
+Write your prompt and click **Improve by AI** next to the Prompt label. Without a saved key, the button is disabled and its tooltip explains how to enable it. The formatter uses `gemini-3.5-flash-lite` with medium thinking and structured JSON output ([Gemini model documentation](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite)). It improves prompt wording and structure while preserving the original intent and requirements, fills missing name/description/shortcut fields, and suggests relevant tags using the current vault. Generated shortcuts are checked against existing and reserved shortcuts; existing tags are reused.
+
+The review popup opens automatically when Gemini returns suggestions. Review the result, choose **Apply format** or **Discard**, then **Save skill** when ready. Both short and detailed prompts can be rephrased for clarity, grammar, concision, and organization. Gemini is instructed to retain the original meaning, language, scope, constraints, and desired output without inventing requirements or guessing ambiguous details. If no useful, meaning-preserving edit is available, it keeps the prompt unchanged. The app rejects empty improvements and changes to code, URLs, or template variables. Meaning preservation relies on the model instructions and your review; literal checks cannot establish semantic equivalence. Your entered metadata stays intact; tags may be added. The current prompt and library metadata (names, descriptions, shortcuts, tags) are sent to Gemini, without sending other skills' prompt bodies. Normal skill editing works without an API key.
 
 ### Custom Chat Providers
 

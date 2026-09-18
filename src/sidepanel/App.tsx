@@ -25,8 +25,9 @@ import {
   SkillVaultSettings,
   DEFAULT_SETTINGS,
 } from '../domain/types';
-import { DraftSkill } from '../domain/template-detector';
+import { DraftSkill } from '../domain/types';
 import { sendExtensionMessage } from '../infrastructure/messaging/client';
+import { SkillRepository } from '../infrastructure/storage/repository';
 import { SearchBar } from './components/SearchBar';
 import { SkillList } from './components/SkillList';
 import { SkillEditor } from './components/SkillEditor';
@@ -36,6 +37,7 @@ import { TrashList } from './components/TrashList';
 type ActiveTab = 'all' | 'favorites' | 'trash' | 'settings';
 
 export const App: React.FC = () => {
+  const [geminiConfigured, setGeminiConfigured] = useState(false);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [trash, setTrash] = useState<TrashedSkill[]>([]);
   const [settings, setSettings] = useState<SkillVaultSettings>(DEFAULT_SETTINGS);
@@ -83,6 +85,14 @@ export const App: React.FC = () => {
     }
   };
 
+  const loadGeminiStatus = async () => {
+    try {
+      setGeminiConfigured(Boolean(await SkillRepository.getInstance().getGeminiApiKey()));
+    } catch {
+      setGeminiConfigured(false);
+    }
+  };
+
   const loadSettings = async () => {
     try {
       const s = await sendExtensionMessage('SETTINGS_GET');
@@ -121,6 +131,7 @@ export const App: React.FC = () => {
     loadSkills();
     loadTrash();
     loadSettings();
+    void loadGeminiStatus();
     checkDraftSkill();
 
     // Periodic check or storage listener for draft skill
@@ -135,6 +146,7 @@ export const App: React.FC = () => {
         } else if (changes['draft:skill'] && !changes['draft:skill'].newValue) {
           setDraftSkill(null);
         }
+        if (changes['credentials:gemini']) void loadGeminiStatus();
         if (changes['skill:index']) {
           loadSkills();
         }
@@ -390,6 +402,8 @@ export const App: React.FC = () => {
                 editingSkill?.id ||
                 (draftSkill ? `draft-${draftSkill.timestamp || draftSkill.content}` : 'new')
               }
+              geminiConfigured={geminiConfigured}
+              onGeminiKeyChanged={setGeminiConfigured}
               initialSkill={editingSkill}
               initialDraftContent={!editingSkill ? draftSkill?.content : undefined}
               draftSkill={!editingSkill ? draftSkill : null}
@@ -444,7 +458,7 @@ export const App: React.FC = () => {
                   <AlertCircle />
                   <AlertTitle>Turn your selection into a skill</AlertTitle>
                   <AlertDescription>
-                    <p>{draftSkill.formatLabel || 'Content'} saved and ready to use.</p>
+                    <p>Content saved and ready to use.</p>
                     <div className="flex gap-2">
                       <Button size="sm" onClick={handleUseDraft}>
                         Create skill
@@ -490,6 +504,8 @@ export const App: React.FC = () => {
               </TabsContent>
               <TabsContent value="settings">
                 <Settings
+                  geminiConfigured={geminiConfigured}
+                  onGeminiKeyChanged={setGeminiConfigured}
                   settings={settings}
                   skills={skills}
                   onUpdateSettings={async (patch) => {

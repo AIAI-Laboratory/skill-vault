@@ -385,6 +385,18 @@ export class SkillRepository {
     };
   }
 
+  // Kept outside settings so keys never enter settings messages or vault backups.
+  async getGeminiApiKey(): Promise<string> {
+    const data = await this.backend.get('credentials:gemini');
+    return typeof data['credentials:gemini'] === 'string' ? data['credentials:gemini'] : '';
+  }
+
+  async setGeminiApiKey(apiKey: string): Promise<void> {
+    const value = apiKey.trim();
+    if (value) await this.backend.set({ 'credentials:gemini': value });
+    else await this.backend.remove('credentials:gemini');
+  }
+
   /**
    * Updates extension settings.
    */

@@ -81,3 +81,15 @@ export interface PageContext {
   title: string;
   selectedText?: string;
 }
+
+export interface DraftSkill {
+  rawContent?: string;
+  content: string;
+  url?: string;
+  title?: string;
+  timestamp?: number;
+  suggestedName?: string;
+  suggestedShortcut?: string;
+  suggestedDescription?: string;
+  suggestedTags?: string[];
+}

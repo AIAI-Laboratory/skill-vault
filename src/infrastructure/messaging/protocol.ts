@@ -6,7 +6,7 @@ import {
   SkillVaultSettings,
   TrashedSkill,
 } from '../../domain/types';
-import type { DraftSkill } from '../../domain/template-detector';
+import type { DraftSkill } from '../../domain/types';
 
 export type MessageType =
   | 'SKILL_SEARCH'
