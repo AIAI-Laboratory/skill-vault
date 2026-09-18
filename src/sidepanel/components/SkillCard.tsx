@@ -47,18 +47,20 @@ export function SkillCard({
   };
 
   return (
-    <Card size="sm" className="min-w-0">
-      <CardHeader>
-        <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2">
-          <CardTitle className="min-w-0 break-words">{skill.name}</CardTitle>
+    <Card size="sm" className="h-72 w-full min-w-0 shrink-0">
+      <CardHeader className="h-20 min-w-0 shrink-0">
+        <div className="mb-1 flex h-6 min-w-0 items-center gap-2">
+          <CardTitle className="min-w-0 flex-1 truncate" title={skill.name}>
+            {skill.name}
+          </CardTitle>
           {skill.shortcut && (
-            <Badge variant="outline">
+            <Badge variant="outline" className="max-w-[40%] shrink-0" title={`/${skill.shortcut}`}>
               <span className="max-w-36 truncate font-mono">/{skill.shortcut}</span>
             </Badge>
           )}
         </div>
         {skill.description && (
-          <CardDescription className="line-clamp-2 break-words">
+          <CardDescription className="min-w-0 line-clamp-2 break-words">
             {skill.description}
           </CardDescription>
         )}
@@ -87,28 +89,35 @@ export function SkillCard({
           </Tooltip>
         </CardAction>
       </CardHeader>
-      <CardContent>
-        <div className="rounded-lg bg-background/70 px-3 py-2.5">
+      <CardContent className="min-h-0 min-w-0 flex-1">
+        <div className="h-20 overflow-hidden rounded-lg bg-background/70 px-3 py-2.5">
           <p className="line-clamp-3 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-muted-foreground">
             {skill.content}
           </p>
         </div>
         {skill.tags.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
+          <div
+            className="scrollbar-none mt-3 flex h-6 min-w-0 items-start gap-1.5 overflow-x-auto"
+            tabIndex={0}
+            role="region"
+            aria-label={`Tags for ${skill.name}`}
+          >
             {skill.tags.map((tag) => (
-              <Badge key={tag} variant="secondary">
+              <Badge key={tag} variant="secondary" className="shrink-0" title={tag}>
                 <span className="max-w-48 truncate">{tag}</span>
               </Badge>
             ))}
           </div>
         )}
       </CardContent>
-      <CardFooter className="flex-wrap justify-between gap-2">
-        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-          <ArrowUpRight className="size-3" />
-          {skill.usage?.count ? `Used ${skill.usage.count} times` : 'Ready when you are'}
+      <CardFooter className="shrink-0 justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+          <ArrowUpRight className="size-3 shrink-0" />
+          <span className="truncate">
+            {skill.usage?.count ? `Used ${skill.usage.count} times` : 'Ready when you are'}
+          </span>
         </span>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           <Tooltip>
             <TooltipTrigger
               render={

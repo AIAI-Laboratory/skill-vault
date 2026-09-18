@@ -72,7 +72,7 @@ export function SkillList({
     );
   }
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex w-full min-w-0 flex-col gap-3">
       {skills.map((skill) => (
         <SkillCard key={skill.id} skill={skill} {...actions} />
       ))}

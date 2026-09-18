@@ -38,7 +38,7 @@ export function SearchBar({ value, onChange, tags, selectedTag, onSelectTag }: S
         )}
       </InputGroup>
       {tags.length > 0 && (
-        <div className="overflow-x-auto pb-1">
+        <div className="scrollbar-none overflow-x-auto pb-1">
           <ToggleGroup
             aria-label="Filter by tag"
             value={[selectedTag ?? '']}
