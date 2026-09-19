@@ -25,7 +25,25 @@ Skill Vault is a Manifest V3 Chrome Extension that bridges the gap between your 
 
 ## 🚀 Quick Start & Installation
 
-### 1. Build the Extension
+### Option 1: Direct Install via Release ZIP (Recommended for Users)
+
+1. Download the latest **`skill-vault.zip`** from [GitHub Releases](https://github.com/AIAI-Laboratory/skill-vault/releases).
+2. Extract the ZIP file into a permanent folder on your computer (e.g., `Documents/SkillVault`).
+   > ⚠️ **Note:** Do not delete or move this folder after installation, as the browser loads the extension files directly from it.
+3. Open your Chromium-based browser and navigate to the extensions page:
+   - **Chrome / Cốc Cốc:** `chrome://extensions`
+   - **Edge:** `edge://extensions`
+   - **Brave:** `brave://extensions`
+4. Toggle **Developer mode** in the top-right corner.
+5. Click **Load unpacked** (_Tải tiện ích đã giải nén_).
+6. Select the extracted `SkillVault` folder (containing `manifest.json`).
+7. Click the extension puzzle icon in your browser toolbar and **Pin** Skill Vault for quick access!
+
+> **How to update:** Download the newest release zip, extract and overwrite the folder, then click the **Reload (🔄)** button on the extension card in `chrome://extensions`.
+
+---
+
+### Option 2: Build from Source (For Developers)
 
 ```bash
 # Install dependencies
@@ -39,15 +57,12 @@ npm run test
 
 # Build extension to /dist
 npm run build
+
+# Or build and package into zip
+npm run package
 ```
 
-### 2. Load into Chrome / Edge / Brave
-
-1. Open your browser and navigate to `chrome://extensions` (or `edge://extensions`).
-2. Toggle **Developer mode** in the top right corner.
-3. Click **Load unpacked**.
-4. Select the `skill-vault/dist` directory.
-5. Pin the **Skill Vault** icon in your browser toolbar!
+Then load the `skill-vault/dist` directory into `chrome://extensions` using **Load unpacked**.
 
 ---
 
@@ -121,4 +136,7 @@ npm run typecheck
 
 # Build bundle to /dist
 npm run build
+
+# Package extension into zip archive
+npm run package
 ```

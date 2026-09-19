@@ -1,0 +1,73 @@
+name: Release Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag (e.g. v0.1.0). Leave blank to use version from package.json.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Publish Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check code formatting
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Build & package extension
+        run: |
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            TAG_NAME="${{ github.event.inputs.tag_name }}"
+          elif [ -n "${GITHUB_REF_NAME}" ] && [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG_NAME="${GITHUB_REF_NAME}"
+          else
+            PKG_VERSION=$(node -p "require('./package.json').version")
+            TAG_NAME="v${PKG_VERSION}"
+          fi
+          echo "RELEASE_TAG=${TAG_NAME}" >> $GITHUB_ENV
+          RELEASE_VERSION="${TAG_NAME}" npm run package
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Releasing ${RELEASE_TAG}..."
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "Release ${RELEASE_TAG} already exists, uploading assets..."
+            gh release upload "${RELEASE_TAG}" skill-vault-*.zip skill-vault.zip --clobber
+          else
+            echo "Creating new release ${RELEASE_TAG}..."
+            gh release create "${RELEASE_TAG}" skill-vault-*.zip skill-vault.zip \
+              --title "Skill Vault ${RELEASE_TAG}" \
+              --generate-notes
+          fi
