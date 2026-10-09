@@ -21,12 +21,25 @@ export class ChatGPTAdapter implements AIAdapter {
   }
 
   findComposer(): ComposerHandle | null {
-    // Primary selector for ChatGPT (prosemirror contenteditable or textarea)
-    const el =
-      (document.querySelector('#prompt-textarea') as HTMLElement) ||
-      (document.querySelector('div[contenteditable="true"]#prompt-textarea') as HTMLElement) ||
-      (document.querySelector('div[contenteditable="true"][data-placeholder]') as HTMLElement) ||
-      (document.querySelector('textarea[data-id="root"]') as HTMLElement);
+    // ChatGPT may render a hidden fallback textarea next to the ProseMirror editor, so
+    // prefer a visible contenteditable and only fall back to visible textareas.
+    const selectors = [
+      '#prompt-textarea[contenteditable="true"]',
+      'div.ProseMirror[contenteditable="true"]',
+      'form [contenteditable="true"][data-placeholder]',
+      '#prompt-textarea',
+      'textarea[name="prompt-textarea"]',
+      'textarea[data-id="root"]',
+    ];
+    const isVisible = (node: HTMLElement) => node.getClientRects().length > 0;
+    let el: HTMLElement | null = null;
+    for (const selector of selectors) {
+      const match = [...document.querySelectorAll<HTMLElement>(selector)].find(isVisible);
+      if (match) {
+        el = match;
+        break;
+      }
+    }
 
     if (!el) return null;
 
