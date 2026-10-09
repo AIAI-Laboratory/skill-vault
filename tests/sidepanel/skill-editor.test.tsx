@@ -118,4 +118,15 @@ describe('Improve by AI editor flow', () => {
     await act(async () => root.render(null));
     expect(signal.aborted).toBe(true);
   });
+
+  it('inserts {{user_input}} at cursor position when clicking the variable button', async () => {
+    await render();
+    const textarea = prompt();
+    textarea.focus();
+    textarea.setSelectionRange(7, 7); // 'Review ' | 'code.\nKeep it safe.'
+    const userInputBtn = button('{{user_input}}');
+    expect(userInputBtn).not.toBeNull();
+    await act(async () => userInputBtn.click());
+    expect(textarea.value).toBe('Review {{user_input}}code.\nKeep it safe.');
+  });
 });

@@ -2,6 +2,29 @@ import { PageContext } from './types';
 
 const VARIABLE_REGEX = /\{\{([a-zA-Z0-9_]+)\}\}/g;
 
+// Matches `{user_input}` or `{{user_input}}` (whitespace inside braces allowed).
+const USER_INPUT_REGEX = /\{\{\s*user_input\s*\}\}|\{\s*user_input\s*\}/g;
+const USER_INPUT_SENTINEL = '\u0000sv-user-input\u0000';
+
+/**
+ * Whether a prompt template has a `{user_input}` slot for selected text.
+ */
+export function hasUserInputSlot(content: string): boolean {
+  return new RegExp(USER_INPUT_REGEX.source).test(content);
+}
+
+/**
+ * Renders a template and places `input` in every `{user_input}` slot.
+ */
+export function fillUserInput(
+  content: string,
+  input: string,
+  context?: Partial<PageContext> & { provider?: string }
+): string {
+  const tokenized = content.replace(USER_INPUT_REGEX, USER_INPUT_SENTINEL);
+  return renderPromptTemplate(tokenized, {}, context).split(USER_INPUT_SENTINEL).join(input);
+}
+
 /**
  * Extracts all {{variable_name}} tokens from a skill prompt template.
  */

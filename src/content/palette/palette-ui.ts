@@ -28,6 +28,7 @@ export class PaletteUI {
   private selectedIndex = 0;
   private theme: SkillVaultSettings['theme'] = DEFAULT_SETTINGS.theme;
   private isOpen = false;
+  private label: string | null = null;
 
   constructor(private options: PaletteOptions) {}
 
@@ -51,11 +52,15 @@ export class PaletteUI {
     this.container.addEventListener('mousedown', (event) => event.preventDefault());
   }
 
-  open(composer: HTMLElement, query: string, results: SkillSearchResult[]) {
+  /**
+   * @param label Optional text shown instead of the search line (used by the template picker).
+   */
+  open(composer: HTMLElement, query: string, results: SkillSearchResult[], label?: string) {
     if (this.isOpen) this.close();
     this.ensureHost();
     this.composer = composer;
-    this.results = results.slice(0, 8);
+    this.label = label ?? null;
+    this.results = label ? results : results.slice(0, 8);
     this.selectedIndex = 0;
     this.isOpen = true;
     this.render(query);
@@ -155,9 +160,11 @@ export class PaletteUI {
 
   private render(query: string) {
     if (!this.container) return;
-    const searchLabel = query
-      ? `<strong>${this.escapeHtml(query)}</strong>`
-      : 'Find a skill by name, shortcut, or tag…';
+    const searchLabel = this.label
+      ? this.escapeHtml(this.label)
+      : query
+        ? `<strong>${this.escapeHtml(query)}</strong>`
+        : 'Find a skill by name, shortcut, or tag…';
     const listHtml = this.results
       .map(
         ({ skill }, index) => `
@@ -191,7 +198,7 @@ export class PaletteUI {
           <button class="sv-close" type="button" aria-label="Close skill palette" title="Close (Esc)">${closeIcon}</button>
         </header>
         <div class="sv-search">${searchIcon}<span class="sv-search-text">${searchLabel}</span></div>
-        ${this.results.length ? `<ul class="sv-list" role="listbox" aria-label="Skills" aria-activedescendant="sv-option-${this.selectedIndex}">${listHtml}</ul>` : `<div class="sv-empty" role="status"><div class="sv-empty-icon">${searchIcon}</div><p class="sv-empty-title">${query ? 'No matching skills' : 'Your library starts here'}</p><p class="sv-empty-hint">${query ? `Try another name or tag for “${this.escapeHtml(query)}”.` : 'Create your first skill in the Skill Vault side panel.'}</p></div>`}
+        ${this.results.length ? `<ul class="sv-list" role="listbox" aria-label="Skills" aria-activedescendant="sv-option-${this.selectedIndex}">${listHtml}</ul>` : this.label ? `<div class="sv-empty" role="status"><div class="sv-empty-icon">${layersIcon}</div><p class="sv-empty-title">No fillable templates yet</p><p class="sv-empty-hint">Add {user_input} to a skill's prompt in the Skill Vault side panel, then try again.</p></div>` : `<div class="sv-empty" role="status"><div class="sv-empty-icon">${searchIcon}</div><p class="sv-empty-title">${query ? 'No matching skills' : 'Your library starts here'}</p><p class="sv-empty-hint">${query ? `Try another name or tag for “${this.escapeHtml(query)}”.` : 'Create your first skill in the Skill Vault side panel.'}</p></div>`}
         <footer class="sv-footer"><div class="sv-hints"><span><kbd class="sv-kbd">↑ ↓</kbd> navigate</span><span><kbd class="sv-kbd">↵</kbd> insert</span><span><kbd class="sv-kbd">esc</kbd> close</span></div><span role="status">${this.results.length} ${this.results.length === 1 ? 'skill' : 'skills'}</span></footer>
       </section>
     `;

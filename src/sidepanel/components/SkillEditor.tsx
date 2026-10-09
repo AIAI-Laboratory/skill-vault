@@ -124,7 +124,20 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
 
   const handleInsertVariable = (varName: string) => {
     setFormatPreview(null);
-    setContent((prev) => `${prev}{{${varName}}}`);
+    const token = `{{${varName}}}`;
+    const el = document.getElementById('skill-content') as HTMLTextAreaElement | null;
+    if (!el) {
+      setContent((prev) => `${prev}${token}`);
+      return;
+    }
+    // Insert at the caret (or replace the selection) so users can design the prompt around it.
+    const start = el.selectionStart ?? content.length;
+    const end = el.selectionEnd ?? start;
+    setContent(content.slice(0, start) + token + content.slice(end));
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start + token.length, start + token.length);
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -333,6 +346,25 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
               Make it dynamic. Insert a variable to fill in context when the skill runs.
             </FieldDescription>
             <div className="flex flex-wrap gap-1.5">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="xs"
+                      className="border-primary/40 text-primary"
+                      onClick={() => handleInsertVariable('user_input')}
+                    />
+                  }
+                >
+                  {'{{user_input}}'}
+                </TooltipTrigger>
+                <TooltipContent className="max-w-64">
+                  Where your selected text goes. Highlight text in a chat, right-click, then choose
+                  “Fill selection into Skill…”.
+                </TooltipContent>
+              </Tooltip>
               {['selected_text', 'current_date', 'page_title', 'page_url'].map((variable) => (
                 <Button
                   key={variable}
