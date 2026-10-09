@@ -57,6 +57,7 @@ export interface SkillSearchResult {
 
 export interface SkillVaultSettings {
   customProviderUrls: string[];
+  disabledCustomProviderUrls: string[];
   enableChatGPT: boolean;
   enableClaude: boolean;
   enableGemini: boolean;
@@ -67,6 +68,7 @@ export interface SkillVaultSettings {
 
 export const DEFAULT_SETTINGS: SkillVaultSettings = {
   customProviderUrls: [],
+  disabledCustomProviderUrls: [],
   enableChatGPT: true,
   enableClaude: true,
   enableGemini: true,

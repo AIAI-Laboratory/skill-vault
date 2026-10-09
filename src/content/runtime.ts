@@ -14,8 +14,42 @@ export class ContentRuntime {
   private activeSlashRange: TextRange | null = null;
   private disposeObserver: (() => void) | null = null;
   private disposed = false;
-  private disposeComposer: (() => void) | null = null;
   private settingsRevision = 0;
+  private blurTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /**
+   * Returns the composer that owns the event target. Re-queries the adapter when the
+   * cached element was replaced, since sites like ChatGPT re-mount their editor.
+   */
+  private resolveComposer(target: EventTarget | null): ComposerHandle | null {
+    if (!this.activeAdapter || !(target instanceof Node)) return null;
+    const cached = this.currentComposer;
+    if (cached?.element.isConnected && cached.element.contains(target)) return cached;
+    const found = this.activeAdapter.findComposer();
+    if (found && found.element.contains(target)) {
+      this.currentComposer = found;
+      return found;
+    }
+    return null;
+  }
+
+  private onDocumentInput = (e: Event) => {
+    if (this.resolveComposer(e.target)) void this.handleInput();
+  };
+
+  private onDocumentKeyDown = (e: KeyboardEvent) => {
+    if (!this.palette.isPaletteOpen() || !this.resolveComposer(e.target)) return;
+    if (this.palette.handleKeyDown(e)) e.stopPropagation();
+  };
+
+  private onDocumentFocusOut = (e: FocusEvent) => {
+    if (!this.currentComposer?.element.contains(e.target as Node)) return;
+    // Delay closing to allow click events inside palette to register
+    clearTimeout(this.blurTimer);
+    this.blurTimer = setTimeout(() => {
+      if (this.palette.isPaletteOpen()) this.palette.close();
+    }, 250);
+  };
 
   private handleSettingsChange = (
     changes: Record<string, chrome.storage.StorageChange>,
@@ -41,6 +75,11 @@ export class ContentRuntime {
   init() {
     this.disposed = false;
     chrome.storage?.onChanged?.addListener(this.handleSettingsChange);
+    // Capture phase on document: runs before the site's editor handlers and survives
+    // composer re-mounts.
+    document.addEventListener('input', this.onDocumentInput, true);
+    document.addEventListener('keydown', this.onDocumentKeyDown, true);
+    document.addEventListener('focusout', this.onDocumentFocusOut, true);
     const revision = this.settingsRevision;
     void sendExtensionMessage('SETTINGS_GET')
       .then((settings) => {
@@ -61,64 +100,22 @@ export class ContentRuntime {
     if (adapter === this.activeAdapter) return;
     this.disposeObserver?.();
     this.disposeObserver = null;
-    this.disposeComposer?.();
-    this.disposeComposer = null;
     this.currentComposer = null;
     this.palette.close();
     this.activeAdapter = adapter;
     if (!this.activeAdapter) return;
 
-    // Attach composer lifecycle observer
+    // Track composer swaps so the palette anchors to the live element.
     this.disposeObserver = this.activeAdapter.observeComposer((composer) => {
       this.attachToComposer(composer);
     });
-
-    // Initial check
-    const initialComposer = this.activeAdapter.findComposer();
-    if (initialComposer) {
-      this.attachToComposer(initialComposer);
-    }
+    this.currentComposer = this.activeAdapter.findComposer();
   }
 
   private attachToComposer(composer: ComposerHandle | null) {
     if (composer?.element === this.currentComposer?.element) return;
-    this.disposeComposer?.();
-    this.disposeComposer = null;
-    if (!composer) {
-      this.currentComposer = null;
-      this.palette.close();
-      return;
-    }
-
     this.currentComposer = composer;
-    const el = composer.element;
-
-    const onInput = () => void this.handleInput();
-    const onKeyDown = (e: KeyboardEvent) => this.handleKeyDown(e);
-    const onBlur = () => {
-      // Delay closing to allow click events inside palette to register
-      setTimeout(() => {
-        if (!this.palette.isPaletteOpen()) return;
-        this.palette.close();
-      }, 250);
-    };
-    el.addEventListener('input', onInput);
-    el.addEventListener('keydown', onKeyDown, true);
-    el.addEventListener('blur', onBlur);
-    this.disposeComposer = () => {
-      el.removeEventListener('input', onInput);
-      el.removeEventListener('keydown', onKeyDown, true);
-      el.removeEventListener('blur', onBlur);
-    };
-  }
-
-  private handleKeyDown(e: KeyboardEvent) {
-    if (this.palette.isPaletteOpen()) {
-      const handled = this.palette.handleKeyDown(e);
-      if (handled) {
-        e.stopPropagation();
-      }
-    }
+    if (!composer) this.palette.close();
   }
 
   private async handleInput() {
@@ -191,8 +188,10 @@ export class ContentRuntime {
 
   dispose() {
     this.disposed = true;
-    this.disposeComposer?.();
-    this.disposeComposer = null;
+    clearTimeout(this.blurTimer);
+    document.removeEventListener('input', this.onDocumentInput, true);
+    document.removeEventListener('keydown', this.onDocumentKeyDown, true);
+    document.removeEventListener('focusout', this.onDocumentFocusOut, true);
     if (typeof chrome !== 'undefined') {
       chrome.storage?.onChanged?.removeListener(this.handleSettingsChange);
     }

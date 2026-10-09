@@ -404,6 +404,12 @@ export class SkillRepository {
     const current = await this.getSettings();
     const updated = { ...current, ...patch };
     updated.customProviderUrls = normalizeProviderUrls(updated.customProviderUrls);
+    const disabled = Array.isArray(updated.disabledCustomProviderUrls)
+      ? updated.disabledCustomProviderUrls
+      : [];
+    updated.disabledCustomProviderUrls = updated.customProviderUrls.filter((url) =>
+      disabled.includes(url)
+    );
     await this.backend.set({ settings: updated });
     return updated;
   }

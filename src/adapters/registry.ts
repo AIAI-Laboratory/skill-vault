@@ -43,8 +43,10 @@ export class AdapterRegistry {
         };
         if (adapter.id in enabled && !enabled[adapter.id as keyof typeof enabled]) continue;
         if (adapter.id === 'generic') {
+          const origin = new URL(context.url).origin;
           if (
-            settings.customProviderUrls.includes(new URL(context.url).origin) &&
+            settings.customProviderUrls.includes(origin) &&
+            !(settings.disabledCustomProviderUrls ?? []).includes(origin) &&
             highestConfidence === 0
           ) {
             bestAdapter = adapter;
