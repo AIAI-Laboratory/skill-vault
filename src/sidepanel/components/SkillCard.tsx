@@ -47,8 +47,8 @@ export function SkillCard({
   };
 
   return (
-    <Card size="sm" className="h-72 w-full min-w-0 shrink-0">
-      <CardHeader className="h-20 min-w-0 shrink-0">
+    <Card size="sm" className="w-full min-w-0 shrink-0">
+      <CardHeader className="min-w-0 shrink-0">
         <div className="mb-1 flex h-6 min-w-0 items-center gap-2">
           <CardTitle className="min-w-0 flex-1 truncate" title={skill.name}>
             {skill.name}
@@ -89,8 +89,8 @@ export function SkillCard({
           </Tooltip>
         </CardAction>
       </CardHeader>
-      <CardContent className="min-h-0 min-w-0 flex-1">
-        <div className="h-20 overflow-hidden rounded-lg bg-background/70 px-3 py-2.5">
+      <CardContent className="min-w-0">
+        <div className="overflow-hidden rounded-lg bg-background/70 px-3 py-2.5">
           <p className="line-clamp-3 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-muted-foreground">
             {skill.content}
           </p>

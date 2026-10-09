@@ -111,6 +111,23 @@ export function Settings({
     }
   };
 
+  const disabledCustom = settings.disabledCustomProviderUrls ?? [];
+
+  const toggleCustomProvider = (url: string, enabled: boolean) =>
+    void update({
+      disabledCustomProviderUrls: enabled
+        ? disabledCustom.filter((item) => item !== url)
+        : [...disabledCustom, url],
+    });
+
+  const removeCustomProvider = (url: string) => {
+    setProviderNotice('');
+    void update({
+      customProviderUrls: settings.customProviderUrls.filter((item) => item !== url),
+      disabledCustomProviderUrls: disabledCustom.filter((item) => item !== url),
+    });
+  };
+
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -179,6 +196,43 @@ export function Settings({
                   </Field>
                 </div>
               ))}
+              {settings.customProviderUrls.map((url, index) => {
+                const id = `custom-provider-${index}`;
+                const host = new URL(url).host;
+                return (
+                  <div key={url} className="flex flex-col gap-4">
+                    <Separator />
+                    <Field orientation="horizontal" data-disabled={updating}>
+                      <FieldContent className="min-w-0">
+                        <FieldLabel htmlFor={id} className="truncate" title={host}>
+                          {host.replace(/^www\./, '')}
+                        </FieldLabel>
+                        <FieldDescription className="truncate" title={url}>
+                          {url}
+                        </FieldDescription>
+                      </FieldContent>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Remove ${url}`}
+                          disabled={updating}
+                          onClick={() => removeCustomProvider(url)}
+                        >
+                          <Trash2 />
+                        </Button>
+                        <Switch
+                          id={id}
+                          disabled={updating}
+                          checked={!disabledCustom.includes(url)}
+                          onCheckedChange={(checked) => toggleCustomProvider(url, checked)}
+                        />
+                      </div>
+                    </Field>
+                  </div>
+                );
+              })}
             </FieldGroup>
           </FieldSet>
           <Separator className="my-5" />
@@ -188,32 +242,6 @@ export function Settings({
               Add a chat website URL. Applies to all pages on that origin, using standard text areas
               or editable chat inputs.
             </FieldDescription>
-            <FieldGroup>
-              {settings.customProviderUrls.map((url) => (
-                <Field key={url} orientation="horizontal" data-disabled={updating}>
-                  <FieldContent className="min-w-0">
-                    <FieldDescription className="break-all">{url}</FieldDescription>
-                  </FieldContent>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Remove ${url}`}
-                    disabled={updating}
-                    onClick={() => {
-                      setProviderNotice('');
-                      void update({
-                        customProviderUrls: settings.customProviderUrls.filter(
-                          (item) => item !== url
-                        ),
-                      });
-                    }}
-                  >
-                    <Trash2 data-icon="inline-start" />
-                  </Button>
-                </Field>
-              ))}
-            </FieldGroup>
             <form
               onSubmit={(event) => {
                 event.preventDefault();
