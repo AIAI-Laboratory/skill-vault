@@ -1,8 +1,9 @@
 import { AdapterRegistry } from '../adapters/registry';
 import { AIAdapter, ComposerHandle, TextRange } from '../adapters/types';
 import { PageContext, Skill, SkillVaultSettings } from '../domain/types';
-import { renderPromptTemplate } from '../domain/variable';
+import { fillUserInput, hasUserInputSlot, renderPromptTemplate } from '../domain/variable';
 import { sendExtensionMessage } from '../infrastructure/messaging/client';
+import { FILL_SELECTION_MESSAGE, FillSelectionMessage } from '../infrastructure/messaging/protocol';
 import { parseSlashCommand } from './slash/parser';
 import { PaletteUI } from './palette/palette-ui';
 
@@ -16,6 +17,46 @@ export class ContentRuntime {
   private disposed = false;
   private settingsRevision = 0;
   private blurTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Composer selection captured on right-click, before the context menu is used. */
+  private capturedSelection: { element: HTMLElement; range: TextRange; text: string } | null = null;
+  /** Set while the template picker is open for "Fill selection into Skill". */
+  private pendingFill: { range: TextRange | null; text: string } | null = null;
+
+  private onDocumentContextMenu = (e: MouseEvent) => {
+    this.capturedSelection = null;
+    const composer = this.resolveComposer(e.target);
+    if (!composer) return;
+    const el = composer.element;
+    if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) {
+      const start = el.selectionStart ?? 0;
+      const end = el.selectionEnd ?? start;
+      if (start !== end)
+        this.capturedSelection = {
+          element: el,
+          range: { start, end },
+          text: el.value.slice(start, end),
+        };
+      return;
+    }
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    if (!el.contains(range.startContainer) || !el.contains(range.endContainer)) return;
+    // Text offsets measured the same way adapters' selectRange walks text nodes.
+    const before = document.createRange();
+    before.selectNodeContents(el);
+    before.setEnd(range.startContainer, range.startOffset);
+    const start = before.toString().length;
+    const text = range.toString();
+    this.capturedSelection = { element: el, range: { start, end: start + text.length }, text };
+  };
+
+  private onRuntimeMessage = (message: unknown) => {
+    const msg = message as Partial<FillSelectionMessage> | undefined;
+    if (msg?.type === FILL_SELECTION_MESSAGE && typeof msg.selectionText === 'string') {
+      void this.handleFillSelection(msg.selectionText);
+    }
+  };
 
   /**
    * Returns the composer that owns the event target. Re-queries the adapter when the
@@ -65,9 +106,14 @@ export class ContentRuntime {
 
   constructor() {
     this.palette = new PaletteUI({
-      onSelect: (skill) => this.handleSkillSelected(skill),
+      onSelect: (skill) => {
+        const fill = this.pendingFill;
+        if (fill) void this.applyFill(skill, fill.text, fill.range);
+        else void this.handleSkillSelected(skill);
+      },
       onClose: () => {
         this.activeSlashRange = null;
+        this.pendingFill = null;
       },
     });
   }
@@ -80,6 +126,8 @@ export class ContentRuntime {
     document.addEventListener('input', this.onDocumentInput, true);
     document.addEventListener('keydown', this.onDocumentKeyDown, true);
     document.addEventListener('focusout', this.onDocumentFocusOut, true);
+    document.addEventListener('contextmenu', this.onDocumentContextMenu, true);
+    chrome.runtime?.onMessage?.addListener(this.onRuntimeMessage);
     const revision = this.settingsRevision;
     void sendExtensionMessage('SETTINGS_GET')
       .then((settings) => {
@@ -186,14 +234,97 @@ export class ContentRuntime {
     }
   }
 
+  /**
+   * "Fill selection into Skill": puts the selected text into a template's `{user_input}`
+   * slot. One fillable template is applied directly; several open the picker.
+   */
+  private async handleFillSelection(selectionText: string) {
+    if (!this.activeAdapter) return;
+    const adapter = this.activeAdapter;
+    const normalize = (value: string) => value.replace(/\s+/g, ' ').trim();
+    const captured = this.capturedSelection;
+    this.capturedSelection = null;
+    const inComposer =
+      !!captured?.element.isConnected && normalize(captured.text) === normalize(selectionText);
+    const text = inComposer ? captured!.text : selectionText;
+    // Selection elsewhere on the page: append the filled prompt to the composer instead.
+    const range = inComposer ? captured!.range : null;
+
+    let skills: Skill[];
+    try {
+      skills = (await sendExtensionMessage('SKILL_LIST')).filter((skill) =>
+        hasUserInputSlot(skill.content)
+      );
+    } catch (err) {
+      console.warn('[SkillVault] Failed to load skills:', err);
+      return;
+    }
+    if (this.disposed || this.activeAdapter !== adapter) return;
+
+    if (skills.length === 1) {
+      await this.applyFill(skills[0], text, range);
+      return;
+    }
+    const composer = adapter.findComposer();
+    if (!composer) return;
+    this.currentComposer = composer;
+    skills.sort((a, b) => Number(b.favorite) - Number(a.favorite));
+    this.palette.open(
+      composer.element,
+      '',
+      skills.map((skill) => ({ skill, score: 0 })),
+      'Choose a template for your selected text'
+    );
+    // Set after open(): open() closes any previous palette, which clears pendingFill.
+    this.pendingFill = { range, text };
+  }
+
+  private async applyFill(skill: Skill, text: string, range: TextRange | null) {
+    const adapter = this.activeAdapter;
+    const composer = adapter?.findComposer();
+    if (!adapter || !composer) return;
+    const rendered = fillUserInput(skill.content, text, {
+      url: window.location.href,
+      title: document.title,
+      provider: adapter.name,
+      selectedText: text,
+    });
+    try {
+      if (range) {
+        await adapter.insertText(rendered, range);
+      } else {
+        this.placeCaretAtEnd(composer);
+        await adapter.insertText(rendered);
+      }
+      sendExtensionMessage('SKILL_RECORD_USAGE', { id: skill.id }).catch(() => {});
+    } catch (err) {
+      console.error('[SkillVault] Failed to fill skill:', err);
+    }
+  }
+
+  private placeCaretAtEnd(composer: ComposerHandle) {
+    const el = composer.element;
+    el.focus();
+    if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) {
+      el.setSelectionRange(el.value.length, el.value.length);
+      return;
+    }
+    const sel = window.getSelection();
+    if (!sel) return;
+    sel.selectAllChildren(el);
+    sel.collapseToEnd();
+  }
+
   dispose() {
     this.disposed = true;
     clearTimeout(this.blurTimer);
     document.removeEventListener('input', this.onDocumentInput, true);
     document.removeEventListener('keydown', this.onDocumentKeyDown, true);
     document.removeEventListener('focusout', this.onDocumentFocusOut, true);
+    document.removeEventListener('contextmenu', this.onDocumentContextMenu, true);
     if (typeof chrome !== 'undefined') {
       chrome.storage?.onChanged?.removeListener(this.handleSettingsChange);
+      chrome.runtime?.onMessage?.removeListener(this.onRuntimeMessage);
     }
     if (this.disposeObserver) {
       this.disposeObserver();

@@ -8,6 +8,14 @@ import {
 } from '../../domain/types';
 import type { DraftSkill } from '../../domain/types';
 
+/** Sent from the background to a tab's content script when "Fill selection into Skill" is clicked. */
+export const FILL_SELECTION_MESSAGE = 'SV_FILL_SELECTION';
+
+export interface FillSelectionMessage {
+  type: typeof FILL_SELECTION_MESSAGE;
+  selectionText: string;
+}
+
 export type MessageType =
   | 'SKILL_SEARCH'
   | 'SKILL_LIST'

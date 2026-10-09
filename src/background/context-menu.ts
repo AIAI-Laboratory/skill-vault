@@ -1,7 +1,9 @@
 import type { DraftSkill } from '../domain/types';
 import { readPageSelection } from '../content/selection';
+import { FILL_SELECTION_MESSAGE } from '../infrastructure/messaging/protocol';
 
 export const CONTEXT_MENU_ID = 'save-selection-as-skill';
+export const FILL_MENU_ID = 'fill-selection-into-skill';
 
 export type { DraftSkill };
 
@@ -41,6 +43,11 @@ export function initContextMenu() {
       title: 'Save selection as Skill',
       contexts: ['selection'],
     });
+    chrome.contextMenus.create({
+      id: FILL_MENU_ID,
+      title: 'Fill selection into Skill…',
+      contexts: ['selection'],
+    });
   });
 }
 
@@ -48,6 +55,20 @@ export async function handleContextMenuClick(
   info: chrome.contextMenus.OnClickData,
   tab?: chrome.tabs.Tab
 ) {
+  if (info.menuItemId === FILL_MENU_ID) {
+    if (tab?.id === undefined || !info.selectionText) return;
+    // The content script owns the composer and the live selection; just hand it off.
+    chrome.tabs
+      .sendMessage(
+        tab.id,
+        { type: FILL_SELECTION_MESSAGE, selectionText: info.selectionText },
+        { frameId: info.frameId ?? 0 }
+      )
+      .catch(() => {
+        console.warn('[SkillVault] Fill into Skill is only available on connected AI chats.');
+      });
+    return;
+  }
   if (info.menuItemId !== CONTEXT_MENU_ID || !info.selectionText) {
     return;
   }
