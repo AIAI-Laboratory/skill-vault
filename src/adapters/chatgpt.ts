@@ -7,6 +7,7 @@ import {
   ComposerChangeCallback,
   DisposeFunction,
 } from './types';
+import { formatInsertedText, InsertedTextStyle } from './format-inserted-text';
 
 export class ChatGPTAdapter implements AIAdapter {
   readonly id = 'chatgpt';
@@ -102,7 +103,7 @@ export class ChatGPTAdapter implements AIAdapter {
     };
   }
 
-  async insertText(text: string, slashRange?: TextRange): Promise<void> {
+  async insertText(text: string, slashRange?: TextRange, style?: InsertedTextStyle): Promise<void> {
     const handle = this.findComposer();
     if (!handle) return;
 
@@ -141,6 +142,12 @@ export class ChatGPTAdapter implements AIAdapter {
 
       handle.element.textContent = text;
       handle.element.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    if (style && slashRange) {
+      const start = success ? slashRange.start : 0;
+      this.selectRange(handle.element, start, start + text.length);
+      formatInsertedText(style);
     }
 
     // Dispatch change event

@@ -209,11 +209,11 @@ describe('SkillRepository with Mock Storage', () => {
     ).rejects.toThrow(/already in use/);
   });
 
-  it('ranks search results with shortcut exact matching first', async () => {
+  it('ranks matches by name, description, and tag', async () => {
     const results = await repo.search('review');
     expect(results.length).toBeGreaterThan(0);
-    // Code Review has shortcut 'review', should be top ranked
-    expect(results[0].skill.shortcut).toBe('review');
+    expect(results[0].skill.name).toBe('Code Review');
+    expect(await repo.search('principal software engineer')).toEqual([]);
   });
 
   it('exports and imports backup JSON correctly', async () => {

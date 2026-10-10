@@ -5,6 +5,7 @@ import { getPalettePosition } from './position';
 export interface PaletteOptions {
   onSelect: (skill: Skill) => void;
   onClose: () => void;
+  onSearch: (query: string) => Promise<SkillSearchResult[]>;
 }
 
 const svg = (paths: string) =>
@@ -29,6 +30,7 @@ export class PaletteUI {
   private theme: SkillVaultSettings['theme'] = DEFAULT_SETTINGS.theme;
   private isOpen = false;
   private label: string | null = null;
+  private searchRevision = 0;
 
   constructor(private options: PaletteOptions) {}
 
@@ -49,7 +51,10 @@ export class PaletteUI {
     this.container = document.createElement('div');
     shadow.appendChild(this.container);
     // Preserve the chat's caret/selection when an option is clicked.
-    this.container.addEventListener('mousedown', (event) => event.preventDefault());
+    this.container.addEventListener('mousedown', (event) => {
+      if (!(event.target instanceof Element) || !event.target.closest('.sv-search-input'))
+        event.preventDefault();
+    });
   }
 
   /**
@@ -64,6 +69,7 @@ export class PaletteUI {
     this.selectedIndex = 0;
     this.isOpen = true;
     this.render(query);
+    this.container?.querySelector<HTMLInputElement>('.sv-search-input')?.focus();
     this.position();
     if (!this.isOpen) return;
     window.addEventListener('resize', this.reposition);
@@ -78,12 +84,21 @@ export class PaletteUI {
     if (!this.isOpen) return;
     this.results = results.slice(0, 8);
     this.selectedIndex = 0;
+    const input = this.container?.querySelector<HTMLInputElement>('.sv-search-input');
+    const restoreFocus = input === this.host?.shadowRoot?.activeElement;
+    const caret = input?.selectionStart ?? query.length;
     this.render(query);
+    const nextInput = this.container?.querySelector<HTMLInputElement>('.sv-search-input');
+    if (restoreFocus && nextInput) {
+      nextInput.focus();
+      nextInput.setSelectionRange(caret, caret);
+    }
     this.position();
   }
 
   close() {
     if (!this.isOpen) return;
+    this.searchRevision++;
     this.isOpen = false;
     window.removeEventListener('resize', this.reposition);
     window.removeEventListener('scroll', this.reposition, true);
@@ -98,6 +113,10 @@ export class PaletteUI {
 
   isPaletteOpen(): boolean {
     return this.isOpen;
+  }
+
+  hasFocus(): boolean {
+    return document.activeElement === this.host;
   }
 
   handleKeyDown(event: KeyboardEvent): boolean {
@@ -160,11 +179,7 @@ export class PaletteUI {
 
   private render(query: string) {
     if (!this.container) return;
-    const searchLabel = this.label
-      ? this.escapeHtml(this.label)
-      : query
-        ? `<strong>${this.escapeHtml(query)}</strong>`
-        : 'Find a skill by name, shortcut, or tag…';
+    const searchLabel = this.label ? this.escapeHtml(this.label) : null;
     const listHtml = this.results
       .map(
         ({ skill }, index) => `
@@ -172,15 +187,15 @@ export class PaletteUI {
         <div class="sv-item-body">
           <div class="sv-item-title-row">
             ${skill.favorite ? `<span class="sv-fav-star" aria-label="Favorite">${starIcon}</span>` : ''}
-            <span class="sv-item-name">${this.escapeHtml(skill.name)}</span>
+            <span class="sv-item-name">${this.highlight(skill.name, query)}</span>
             ${skill.shortcut ? `<span class="sv-shortcut-badge">/${this.escapeHtml(skill.shortcut)}</span>` : ''}
           </div>
-          ${skill.description ? `<p class="sv-item-desc">${this.escapeHtml(skill.description)}</p>` : ''}
+          ${skill.description ? `<p class="sv-item-desc">${this.highlight(skill.description, query)}</p>` : ''}
           ${
             skill.tags.length
               ? `<div class="sv-item-tags">${skill.tags
                   .slice(0, 3)
-                  .map((tag) => `<span class="sv-tag">${this.escapeHtml(tag)}</span>`)
+                  .map((tag) => `<span class="sv-tag">${this.highlight(tag, query)}</span>`)
                   .join('')}</div>`
               : ''
           }
@@ -194,12 +209,15 @@ export class PaletteUI {
     this.container.innerHTML = `
       <section class="sv-palette" aria-label="Skill Vault">
         <header class="sv-header">
-          <div class="sv-brand"><span class="sv-brand-mark">${layersIcon}</span><div><p class="sv-brand-name">Skill Vault</p><p class="sv-brand-description">Your best prompts, right here.</p></div></div>
+          ${
+            searchLabel
+              ? `<div class="sv-search sv-search-label">${searchIcon}<span class="sv-search-text">${searchLabel}</span></div>`
+              : `<label class="sv-search">${searchIcon}<input class="sv-search-input" type="text" aria-label="Search skills" placeholder="Find a skill by name, description, or tag…" value="${this.escapeHtml(query)}"></label>`
+          }
           <button class="sv-close" type="button" aria-label="Close skill palette" title="Close (Esc)">${closeIcon}</button>
         </header>
-        <div class="sv-search">${searchIcon}<span class="sv-search-text">${searchLabel}</span></div>
         ${this.results.length ? `<ul class="sv-list" role="listbox" aria-label="Skills" aria-activedescendant="sv-option-${this.selectedIndex}">${listHtml}</ul>` : this.label ? `<div class="sv-empty" role="status"><div class="sv-empty-icon">${layersIcon}</div><p class="sv-empty-title">No fillable templates yet</p><p class="sv-empty-hint">Add {user_input} to a skill's prompt in the Skill Vault side panel, then try again.</p></div>` : `<div class="sv-empty" role="status"><div class="sv-empty-icon">${searchIcon}</div><p class="sv-empty-title">${query ? 'No matching skills' : 'Your library starts here'}</p><p class="sv-empty-hint">${query ? `Try another name or tag for “${this.escapeHtml(query)}”.` : 'Create your first skill in the Skill Vault side panel.'}</p></div>`}
-        <footer class="sv-footer"><div class="sv-hints"><span><kbd class="sv-kbd">↑ ↓</kbd> navigate</span><span><kbd class="sv-kbd">↵</kbd> insert</span><span><kbd class="sv-kbd">esc</kbd> close</span></div><span role="status">${this.results.length} ${this.results.length === 1 ? 'skill' : 'skills'}</span></footer>
+        <footer class="sv-footer"><div class="sv-hints"><span><kbd class="sv-kbd">↑ ↓</kbd> navigate</span><span><kbd class="sv-kbd">↵</kbd> insert</span><span><kbd class="sv-kbd">esc</kbd> close</span></div></footer>
       </section>
     `;
     this.container.querySelector('.sv-close')?.addEventListener('click', (event) => {
@@ -207,6 +225,29 @@ export class PaletteUI {
       event.stopPropagation();
       this.close();
     });
+    this.container
+      .querySelector<HTMLInputElement>('.sv-search-input')
+      ?.addEventListener('input', (event) => {
+        const value = (event.currentTarget as HTMLInputElement).value;
+        const revision = ++this.searchRevision;
+        void this.options.onSearch(value).then((results) => {
+          if (this.isOpen && revision === this.searchRevision) this.update(value, results);
+        });
+      });
+    this.container
+      .querySelector<HTMLInputElement>('.sv-search-input')
+      ?.addEventListener('keydown', (event) => {
+        if (event.isComposing) return;
+        if (
+          event.key === 'Escape' ||
+          event.key === 'ArrowDown' ||
+          event.key === 'ArrowUp' ||
+          event.key === 'Enter' ||
+          event.key === 'Tab'
+        ) {
+          if (this.handleKeyDown(event)) event.stopPropagation();
+        }
+      });
     this.container.querySelectorAll<HTMLElement>('.sv-item').forEach((item, index) => {
       item.addEventListener('mousemove', () => {
         if (index === this.selectedIndex) return;
@@ -246,5 +287,19 @@ export class PaletteUI {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  private highlight(value: string, query: string): string {
+    const term = query.trim().replace(/^\//, '');
+    if (!term) return this.escapeHtml(value);
+    const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return value
+      .split(new RegExp(`(${escapedTerm})`, 'gi'))
+      .map((part) =>
+        part.toLowerCase() === term.toLowerCase()
+          ? `<mark class="sv-match">${this.escapeHtml(part)}</mark>`
+          : this.escapeHtml(part)
+      )
+      .join('');
   }
 }

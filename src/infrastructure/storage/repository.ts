@@ -304,45 +304,32 @@ export class SkillRepository {
     for (const skill of skills) {
       let score = 0;
       const name = skill.name.toLowerCase();
-      const shortcut = (skill.shortcut || '').toLowerCase();
       const desc = (skill.description || '').toLowerCase();
       const tags = (skill.tags || []).map((t) => t.toLowerCase());
 
-      // 1. shortcut exact (+100)
-      if (shortcut && shortcut === query) {
-        score += 100;
-      }
-      // 2. name exact (+90)
+      // 1. name exact (+90)
       if (name === query) {
         score += 90;
       }
-      // 3. name startsWith (+70)
+      // 2. name startsWith (+70)
       if (name.startsWith(query)) {
         score += 70;
       }
-      // 4. shortcut startsWith (+60)
-      if (shortcut && shortcut.startsWith(query)) {
-        score += 60;
-      }
-      // 5. tag exact (+50)
+      // 3. tag exact (+50)
       if (tags.some((t) => t === query)) {
         score += 50;
       }
-      // 6. name contains (+40)
+      // 4. name contains (+40)
       if (name.includes(query)) {
         score += 40;
       }
-      // 7. description contains (+20)
+      // 5. description contains (+20)
       if (desc.includes(query)) {
         score += 20;
       }
-      // 8. tag contains (+25)
+      // 6. tag contains (+25)
       if (tags.some((t) => t.includes(query))) {
         score += 25;
-      }
-      // 9. content contains (+15)
-      if (skill.content.toLowerCase().includes(query)) {
-        score += 15;
       }
 
       // Bonus modifiers

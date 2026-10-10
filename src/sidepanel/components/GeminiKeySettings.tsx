@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyRound, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
@@ -44,8 +44,10 @@ export function GeminiKeySettings({ configured, onChanged }: GeminiKeySettingsPr
   };
   return (
     <FieldGroup>
-      <Field data-invalid={Boolean(error)} data-disabled={busy}>
-        <FieldLabel htmlFor="gemini-api-key">Gemini API key</FieldLabel>
+      <Field className="gap-3" data-invalid={Boolean(error)} data-disabled={busy}>
+        <FieldLabel className="text-sm text-muted-foreground" htmlFor="gemini-api-key">
+          Gemini API key
+        </FieldLabel>
         <Input
           id="gemini-api-key"
           type="password"
@@ -59,8 +61,8 @@ export function GeminiKeySettings({ configured, onChanged }: GeminiKeySettingsPr
           aria-describedby="gemini-key-help"
         />
         <FieldDescription id="gemini-key-help">
-          Saved only in this browser, excluded from backups. When you click Improve by AI, your
-          prompt and library metadata are sent to Gemini.{' '}
+          Stored in this browser, not in backups. Your prompt and skill details go to Gemini only
+          when you use Improve by AI.{' '}
           <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">
             Get an API key
           </a>
@@ -71,7 +73,7 @@ export function GeminiKeySettings({ configured, onChanged }: GeminiKeySettingsPr
       </Field>
       <div className="flex flex-wrap gap-2">
         <Button type="button" onClick={() => void saveKey()} disabled={busy || !key.trim()}>
-          {busy ? <Spinner data-icon="inline-start" /> : <KeyRound data-icon="inline-start" />}
+          {busy && <Spinner data-icon="inline-start" />}
           Save API key
         </Button>
         {configured && (

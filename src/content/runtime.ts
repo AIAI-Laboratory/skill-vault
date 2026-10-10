@@ -21,6 +21,7 @@ export class ContentRuntime {
   private capturedSelection: { element: HTMLElement; range: TextRange; text: string } | null = null;
   /** Set while the template picker is open for "Fill selection into Skill". */
   private pendingFill: { range: TextRange | null; text: string } | null = null;
+  private skillLabels = new Map<string, string>();
 
   private onDocumentContextMenu = (e: MouseEvent) => {
     this.capturedSelection = null;
@@ -79,16 +80,50 @@ export class ContentRuntime {
   };
 
   private onDocumentKeyDown = (e: KeyboardEvent) => {
-    if (!this.palette.isPaletteOpen() || !this.resolveComposer(e.target)) return;
-    if (this.palette.handleKeyDown(e)) e.stopPropagation();
+    if (this.palette.isPaletteOpen() && this.resolveComposer(e.target)) {
+      if (this.palette.handleKeyDown(e)) e.stopPropagation();
+      return;
+    }
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && this.resolveComposer(e.target))
+      this.expandSkillLabels();
   };
+
+  private onDocumentSubmit = () => this.expandSkillLabels();
+
+  private onDocumentClick = (event: MouseEvent) => {
+    if (!(event.target instanceof Element)) return;
+    const button = event.target.closest<HTMLElement>('button, [role="button"]');
+    if (!button) return;
+    const label = `${button.getAttribute('aria-label') || ''} ${button.getAttribute('title') || ''} ${button.getAttribute('data-testid') || ''} ${button.textContent || ''}`;
+    if (/\b(send|submit)\b/i.test(label)) this.expandSkillLabels();
+  };
+
+  private expandSkillLabels() {
+    const adapter = this.activeAdapter;
+    if (!adapter || !this.skillLabels.size) return;
+    const text = adapter.readComposer();
+    const replacements: { start: number; end: number; prompt: string }[] = [];
+    for (const [label, prompt] of this.skillLabels) {
+      let start = text.indexOf(label);
+      while (start !== -1) {
+        replacements.push({ start, end: start + label.length, prompt });
+        start = text.indexOf(label, start + label.length);
+      }
+    }
+    replacements.sort((a, b) => b.start - a.start);
+    for (const replacement of replacements) {
+      void adapter
+        .insertText(replacement.prompt, { start: replacement.start, end: replacement.end }, 'plain')
+        .catch((error) => console.warn('[SkillVault] Failed to expand skill label:', error));
+    }
+  }
 
   private onDocumentFocusOut = (e: FocusEvent) => {
     if (!this.currentComposer?.element.contains(e.target as Node)) return;
     // Delay closing to allow click events inside palette to register
     clearTimeout(this.blurTimer);
     this.blurTimer = setTimeout(() => {
-      if (this.palette.isPaletteOpen()) this.palette.close();
+      if (this.palette.isPaletteOpen() && !this.palette.hasFocus()) this.palette.close();
     }, 250);
   };
 
@@ -111,6 +146,15 @@ export class ContentRuntime {
         if (fill) void this.applyFill(skill, fill.text, fill.range);
         else void this.handleSkillSelected(skill);
       },
+      onSearch: async (query) => {
+        try {
+          return await sendExtensionMessage('SKILL_SEARCH', { query });
+        } catch (error) {
+          if (!this.stopIfExtensionContextInvalidated(error))
+            console.warn('[SkillVault] Failed to search skills:', error);
+          return [];
+        }
+      },
       onClose: () => {
         this.activeSlashRange = null;
         this.pendingFill = null;
@@ -125,6 +169,8 @@ export class ContentRuntime {
     // composer re-mounts.
     document.addEventListener('input', this.onDocumentInput, true);
     document.addEventListener('keydown', this.onDocumentKeyDown, true);
+    document.addEventListener('submit', this.onDocumentSubmit, true);
+    document.addEventListener('click', this.onDocumentClick, true);
     document.addEventListener('focusout', this.onDocumentFocusOut, true);
     document.addEventListener('contextmenu', this.onDocumentContextMenu, true);
     chrome.runtime?.onMessage?.addListener(this.onRuntimeMessage);
@@ -133,7 +179,13 @@ export class ContentRuntime {
       .then((settings) => {
         if (!this.disposed && revision === this.settingsRevision) this.applySettings(settings);
       })
-      .catch(() => {});
+      .catch((error) => this.stopIfExtensionContextInvalidated(error));
+  }
+
+  private stopIfExtensionContextInvalidated(error: unknown) {
+    if (!String(error).includes('Extension context invalidated')) return false;
+    this.dispose();
+    return true;
   }
 
   private applySettings(settings: SkillVaultSettings) {
@@ -188,6 +240,7 @@ export class ContentRuntime {
           }
         }
       } catch (err) {
+        if (this.stopIfExtensionContextInvalidated(err)) return;
         console.warn('[SkillVault] Failed to query skills:', err);
       }
     } else {
@@ -222,12 +275,17 @@ export class ContentRuntime {
     };
 
     const rendered = renderPromptTemplate(skill.content, {}, context);
+    const label = skill.shortcut ? `🏷️ /${skill.shortcut}` : `🏷️ ${skill.name}`;
+    this.skillLabels.set(label, rendered);
 
     try {
-      await this.activeAdapter.insertText(rendered, targetRange || undefined);
+      await this.activeAdapter.insertText(label, targetRange || undefined, 'highlight');
       // Record usage asynchronously
-      sendExtensionMessage('SKILL_RECORD_USAGE', { id: skill.id }).catch(() => {});
+      sendExtensionMessage('SKILL_RECORD_USAGE', { id: skill.id }).catch((error) =>
+        this.stopIfExtensionContextInvalidated(error)
+      );
     } catch (err) {
+      if (this.stopIfExtensionContextInvalidated(err)) return;
       console.error('[SkillVault] Failed to insert skill:', err);
     } finally {
       this.activeSlashRange = null;
@@ -256,6 +314,7 @@ export class ContentRuntime {
         hasUserInputSlot(skill.content)
       );
     } catch (err) {
+      if (this.stopIfExtensionContextInvalidated(err)) return;
       console.warn('[SkillVault] Failed to load skills:', err);
       return;
     }
@@ -296,8 +355,11 @@ export class ContentRuntime {
         this.placeCaretAtEnd(composer);
         await adapter.insertText(rendered);
       }
-      sendExtensionMessage('SKILL_RECORD_USAGE', { id: skill.id }).catch(() => {});
+      sendExtensionMessage('SKILL_RECORD_USAGE', { id: skill.id }).catch((error) =>
+        this.stopIfExtensionContextInvalidated(error)
+      );
     } catch (err) {
+      if (this.stopIfExtensionContextInvalidated(err)) return;
       console.error('[SkillVault] Failed to fill skill:', err);
     }
   }
@@ -320,16 +382,21 @@ export class ContentRuntime {
     clearTimeout(this.blurTimer);
     document.removeEventListener('input', this.onDocumentInput, true);
     document.removeEventListener('keydown', this.onDocumentKeyDown, true);
+    document.removeEventListener('submit', this.onDocumentSubmit, true);
+    document.removeEventListener('click', this.onDocumentClick, true);
     document.removeEventListener('focusout', this.onDocumentFocusOut, true);
     document.removeEventListener('contextmenu', this.onDocumentContextMenu, true);
-    if (typeof chrome !== 'undefined') {
+    try {
       chrome.storage?.onChanged?.removeListener(this.handleSettingsChange);
       chrome.runtime?.onMessage?.removeListener(this.onRuntimeMessage);
+    } catch {
+      // The extension can invalidate the API while a pending message is rejecting.
     }
     if (this.disposeObserver) {
       this.disposeObserver();
       this.disposeObserver = null;
     }
     this.palette.close();
+    this.skillLabels.clear();
   }
 }

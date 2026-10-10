@@ -85,7 +85,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply m-0 bg-background font-sans text-sm text-foreground antialiased;
+    @apply m-0 bg-background font-sans text-[15px] leading-relaxed text-foreground antialiased;
   }
   button:not(:disabled),
   [role='tab']:not([aria-disabled='true']) {
@@ -95,7 +95,9 @@
     @apply bg-primary/25;
   }
   * {
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
   }
 }
