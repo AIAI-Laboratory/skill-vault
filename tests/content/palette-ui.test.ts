@@ -8,6 +8,7 @@ let composer: HTMLTextAreaElement;
 let palette: PaletteUI;
 const onSelect = vi.fn();
 const onClose = vi.fn();
+const onSearch = vi.fn(async () => results);
 const shadow = () => document.querySelector('skill-vault-root')!.shadowRoot!;
 const key = (value: string) => new KeyboardEvent('keydown', { key: value, cancelable: true });
 
@@ -27,7 +28,7 @@ beforeEach(() => {
     y: 600,
     toJSON: () => ({}),
   });
-  palette = new PaletteUI({ onSelect, onClose });
+  palette = new PaletteUI({ onSelect, onClose, onSearch });
 });
 afterEach(() => {
   palette.close();
@@ -61,13 +62,13 @@ describe('in-chat skill palette', () => {
     expect(document.querySelector('skill-vault-root')).toBeNull();
   });
 
-  it('keeps composer focus on mouse down and inserts the hovered result with Tab', () => {
+  it('keeps search focus on mouse down and inserts the hovered result with Tab', () => {
     palette.open(composer, '', results);
     const option = shadow().querySelectorAll('.sv-item')[1];
     const mouse = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
     option.dispatchEvent(mouse);
     expect(mouse.defaultPrevented).toBe(true);
-    expect(document.activeElement).toBe(composer);
+    expect(shadow().activeElement).toBe(shadow().querySelector('.sv-search-input'));
     option.dispatchEvent(new MouseEvent('mousemove'));
     palette.handleKeyDown(key('Tab'));
     expect(onSelect).toHaveBeenCalledExactlyOnceWith(SEED_SKILLS[1]);
@@ -127,7 +128,7 @@ describe('in-chat skill palette', () => {
     palette.open(composer, content, [{ skill, score: 1 }]);
     expect(shadow().querySelector('img')).toBeNull();
     expect(shadow().querySelector('.sv-item-name')?.textContent).toBe(content);
-    expect(shadow().querySelector('.sv-search-text')?.textContent).toBe(content);
+    expect(shadow().querySelector<HTMLInputElement>('.sv-search-input')?.value).toBe(content);
   });
 
   it('applies theme changes while open and preserves them when reopened', () => {

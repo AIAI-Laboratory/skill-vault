@@ -7,6 +7,7 @@ import {
   ComposerChangeCallback,
   DisposeFunction,
 } from './types';
+import { formatInsertedText, InsertedTextStyle } from './format-inserted-text';
 
 export class ClaudeAdapter implements AIAdapter {
   readonly id = 'claude';
@@ -80,7 +81,7 @@ export class ClaudeAdapter implements AIAdapter {
     }
   }
 
-  async insertText(text: string, slashRange?: TextRange): Promise<void> {
+  async insertText(text: string, slashRange?: TextRange, style?: InsertedTextStyle): Promise<void> {
     const handle = this.findComposer();
     if (!handle) return;
 
@@ -103,6 +104,12 @@ export class ClaudeAdapter implements AIAdapter {
       handle.element.dispatchEvent(inputEvt);
       handle.element.textContent = text;
       handle.element.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    if (style && slashRange) {
+      const start = success ? slashRange.start : 0;
+      this.selectRange(handle.element, start, start + text.length);
+      formatInsertedText(style);
     }
 
     handle.element.dispatchEvent(new Event('input', { bubbles: true }));

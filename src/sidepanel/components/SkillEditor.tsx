@@ -191,11 +191,11 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
 
   return (
     <form
-      className="flex flex-col gap-6"
+      className="flex flex-col gap-7"
       onSubmit={handleSubmit}
       onChange={() => setFormatPreview(null)}
     >
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-4">
         <Button
           type="button"
           variant="ghost"
@@ -207,17 +207,9 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
           <ArrowLeft data-icon="inline-start" />
           Back to vault
         </Button>
-        <div>
-          <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.2em] text-primary">
-            A prompt worth keeping
-          </p>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {initialSkill ? 'Refine your skill.' : 'Create something reusable.'}
-          </h1>
-          <p className="mt-1 text-muted-foreground">
-            Give your best instructions a permanent home.
-          </p>
-        </div>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {initialSkill ? 'Edit skill' : 'New skill'}
+        </h1>
       </div>
       {draftMeta && (
         <Alert>
@@ -340,11 +332,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
               onChange={(event) => setContent(event.target.value)}
               required
               aria-invalid={Boolean(error && !content.trim())}
-              aria-describedby="variables-hint"
             />
-            <FieldDescription id="variables-hint">
-              Make it dynamic. Insert a variable to fill in context when the skill runs.
-            </FieldDescription>
             <div className="flex flex-wrap gap-1.5">
               <Tooltip>
                 <TooltipTrigger
@@ -384,37 +372,27 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
               placeholder="coding, review, productivity"
               value={tagsStr}
               onChange={(event) => setTagsStr(event.target.value)}
-              aria-describedby="tags-hint"
             />
-            <FieldDescription id="tags-hint">
-              Separate tags with commas to keep your library organized.
-            </FieldDescription>
           </Field>
           <Field orientation="horizontal">
             <FieldContent>
               <FieldLabel htmlFor="skill-favorite">Add to favorites</FieldLabel>
-              <FieldDescription>Keep this skill within easy reach.</FieldDescription>
             </FieldContent>
             <Switch id="skill-favorite" checked={favorite} onCheckedChange={setFavorite} />
           </Field>
         </FieldGroup>
       </fieldset>
       <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={formatting || saving}
-            onClick={() => setKeyDialogOpen(true)}
-          >
-            {geminiConfigured ? 'Manage API key' : 'Add API key'}
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          AI improves wording and structure while keeping your intent and requirements. Review
-          suggestions before applying. Your prompt and library metadata are sent to Gemini.
-        </p>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="w-fit"
+          disabled={formatting || saving}
+          onClick={() => setKeyDialogOpen(true)}
+        >
+          {geminiConfigured ? 'Manage API key' : 'Add API key'}
+        </Button>
         {formatError && (
           <Alert variant="destructive">
             <AlertCircle />

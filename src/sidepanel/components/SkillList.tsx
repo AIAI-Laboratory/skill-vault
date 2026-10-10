@@ -13,6 +13,7 @@ import {
 
 interface SkillListProps {
   skills: Skill[];
+  searchQuery: string;
   onEdit: (skill: Skill) => void;
   onDelete: (id: string) => void;
   onToggleFavorite: (id: string, current: boolean) => void;
@@ -25,6 +26,7 @@ interface SkillListProps {
 
 export function SkillList({
   skills,
+  searchQuery,
   onCreateNew,
   hasFilters,
   favoritesOnly,
@@ -74,7 +76,7 @@ export function SkillList({
   return (
     <div className="flex w-full min-w-0 flex-col gap-3">
       {skills.map((skill) => (
-        <SkillCard key={skill.id} skill={skill} {...actions} />
+        <SkillCard key={skill.id} skill={skill} searchQuery={searchQuery} {...actions} />
       ))}
     </div>
   );

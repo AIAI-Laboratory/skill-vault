@@ -2,32 +2,12 @@ import { GeminiKeySettings } from './GeminiKeySettings';
 import { normalizeProviderUrl, providerMatchPattern } from '../../domain/custom-provider';
 import { Input } from '@/components/ui/input';
 import { useRef, useState } from 'react';
-import {
-  Plus,
-  Trash2,
-  Download,
-  Upload,
-  ShieldCheck,
-  Sun,
-  Moon,
-  Monitor,
-  MessageSquare,
-  Sparkles,
-  SlidersHorizontal,
-} from 'lucide-react';
-import { Skill, SkillVaultSettings } from '../../domain/types';
+import { Plus, Trash2, Download, Upload } from 'lucide-react';
+import { SkillVaultSettings } from '../../domain/types';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-} from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import {
   Field,
-  FieldContent,
   FieldError,
   FieldDescription,
   FieldGroup,
@@ -37,31 +17,27 @@ import {
 } from '@/components/ui/field';
 import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 
 interface SettingsProps {
   geminiConfigured: boolean;
   onGeminiKeyChanged: (configured: boolean) => void;
   settings: SkillVaultSettings;
-  skills: Skill[];
   onUpdateSettings: (patch: Partial<SkillVaultSettings>) => Promise<void>;
   onExport: () => void;
   onImport: (file: File) => Promise<void>;
 }
 
 const providers = [
-  { key: 'enableChatGPT', name: 'ChatGPT', domain: 'chatgpt.com' },
-  { key: 'enableClaude', name: 'Claude', domain: 'claude.ai' },
-  { key: 'enableGemini', name: 'Gemini', domain: 'gemini.google.com' },
+  { key: 'enableChatGPT', name: 'ChatGPT' },
+  { key: 'enableClaude', name: 'Claude' },
+  { key: 'enableGemini', name: 'Gemini' },
 ] as const;
 
 export function Settings({
   geminiConfigured,
   onGeminiKeyChanged,
   settings,
-  skills,
   onUpdateSettings,
   onExport,
   onImport,
@@ -129,154 +105,127 @@ export function Settings({
   };
 
   return (
-    <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Make yourself at home.</h1>
-        <p className="mt-1 text-muted-foreground">Your vault, your preferences.</p>
-      </div>
+    <div className="flex flex-col gap-4">
+      <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
       <Card size="sm">
         <CardHeader>
-          <CardTitle>Your vault at a glance</CardTitle>
-          <CardDescription>A small collection with a growing impact.</CardDescription>
+          <CardTitle className="text-base font-semibold">Improve by AI</CardTitle>
         </CardHeader>
-        <CardContent>
-          <dl className="grid grid-cols-3 gap-3">
-            {[
-              ['Skills', skills.length],
-              ['Favorites', skills.filter((s) => s.favorite).length],
-              ['Times used', skills.reduce((sum, skill) => sum + (skill.usage?.count || 0), 0)],
-            ].map(([label, value]) => (
-              <div key={label} className="flex flex-col-reverse gap-1 rounded-lg bg-muted/60 p-3">
-                <dt className="text-[11px] text-muted-foreground">{label}</dt>
-                <dd className="text-2xl font-semibold tabular-nums tracking-tight">{value}</dd>
-              </div>
-            ))}
-          </dl>
-        </CardContent>
-      </Card>
-      <Card size="sm">
-        <CardHeader>
-          <CardTitle>Improve by AI</CardTitle>
-          <CardDescription>
-            Lightly improve simple prompts and suggest metadata with Gemini.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-2">
           <GeminiKeySettings configured={geminiConfigured} onChanged={onGeminiKeyChanged} />
         </CardContent>
       </Card>
       <Card size="sm">
         <CardHeader>
-          <CardTitle>
-            <span className="flex items-center gap-2">
-              <MessageSquare className="size-4 text-primary" />
-              AI connections
-            </span>
-          </CardTitle>
-          <CardDescription>Bring your skills into the chats you use.</CardDescription>
+          <CardTitle className="text-base font-semibold">AI connections</CardTitle>
         </CardHeader>
         <CardContent>
           <FieldSet>
             <FieldLegend className="sr-only">Supported AI providers</FieldLegend>
-            <FieldGroup className="gap-4">
-              {providers.map((provider, index) => (
-                <div key={provider.key} className="flex flex-col gap-4">
-                  {index > 0 && <Separator />}
-                  <Field orientation="horizontal" data-disabled={updating}>
-                    <FieldContent>
-                      <FieldLabel htmlFor={provider.key}>{provider.name}</FieldLabel>
-                      <FieldDescription>{provider.domain}</FieldDescription>
-                    </FieldContent>
-                    <Switch
-                      id={provider.key}
-                      disabled={updating}
-                      checked={settings[provider.key]}
-                      onCheckedChange={(checked) => void update({ [provider.key]: checked })}
-                    />
-                  </Field>
-                </div>
+            <FieldGroup className="gap-2">
+              {providers.map((provider) => (
+                <Field
+                  key={provider.key}
+                  orientation="horizontal"
+                  className="items-center rounded-lg bg-muted px-3 py-2.5"
+                  data-disabled={updating}
+                >
+                  <FieldLabel htmlFor={provider.key}>{provider.name}</FieldLabel>
+                  <Switch
+                    id={provider.key}
+                    disabled={updating}
+                    checked={settings[provider.key]}
+                    onCheckedChange={(checked) => void update({ [provider.key]: checked })}
+                  />
+                </Field>
               ))}
               {settings.customProviderUrls.map((url, index) => {
                 const id = `custom-provider-${index}`;
                 const host = new URL(url).host;
                 return (
-                  <div key={url} className="flex flex-col gap-4">
-                    <Separator />
-                    <Field orientation="horizontal" data-disabled={updating}>
-                      <FieldContent className="min-w-0">
-                        <FieldLabel htmlFor={id} className="truncate" title={host}>
-                          {host.replace(/^www\./, '')}
-                        </FieldLabel>
-                        <FieldDescription className="truncate" title={url}>
-                          {url}
-                        </FieldDescription>
-                      </FieldContent>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Remove ${url}`}
-                          disabled={updating}
-                          onClick={() => removeCustomProvider(url)}
-                        >
-                          <Trash2 />
-                        </Button>
-                        <Switch
-                          id={id}
-                          disabled={updating}
-                          checked={!disabledCustom.includes(url)}
-                          onCheckedChange={(checked) => toggleCustomProvider(url, checked)}
-                        />
-                      </div>
-                    </Field>
-                  </div>
+                  <Field
+                    key={url}
+                    orientation="horizontal"
+                    className="items-center rounded-lg bg-muted px-3 py-2.5"
+                    data-disabled={updating}
+                  >
+                    <FieldLabel htmlFor={id} className="min-w-0 flex-1 truncate" title={host}>
+                      {host.replace(/^www\./, '')}
+                    </FieldLabel>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Remove ${url}`}
+                        disabled={updating}
+                        onClick={() => removeCustomProvider(url)}
+                      >
+                        <Trash2 />
+                      </Button>
+                      <Switch
+                        id={id}
+                        disabled={updating}
+                        checked={!disabledCustom.includes(url)}
+                        onCheckedChange={(checked) => toggleCustomProvider(url, checked)}
+                      />
+                    </div>
+                  </Field>
                 );
               })}
             </FieldGroup>
           </FieldSet>
-          <Separator className="my-5" />
-          <FieldSet>
-            <FieldLegend>Custom providers</FieldLegend>
-            <FieldDescription>
-              Add a chat website URL. Applies to all pages on that origin, using standard text areas
-              or editable chat inputs.
-            </FieldDescription>
+          <FieldSet className="mt-5 gap-3">
+            <FieldLegend className="mb-0 font-semibold">Custom providers</FieldLegend>
             <form
               onSubmit={(event) => {
                 event.preventDefault();
                 void addProvider();
               }}
             >
-              <FieldGroup>
-                <Field data-invalid={!!providerError} data-disabled={updating}>
-                  <FieldLabel htmlFor="custom-provider-url">Provider URL</FieldLabel>
-                  <Input
-                    id="custom-provider-url"
-                    type="url"
-                    placeholder="https://chat.example.com"
-                    value={providerUrl}
+              <FieldGroup className="gap-3">
+                <div className="flex flex-wrap items-end gap-2">
+                  <Field
+                    className="min-w-0 flex-1"
+                    data-invalid={!!providerError}
+                    data-disabled={updating}
+                  >
+                    <FieldLabel className="sr-only" htmlFor="custom-provider-url">
+                      Provider URL
+                    </FieldLabel>
+                    <Input
+                      id="custom-provider-url"
+                      type="url"
+                      className="bg-muted"
+                      placeholder="https://chat.example.com"
+                      value={providerUrl}
+                      disabled={updating}
+                      required
+                      aria-invalid={!!providerError}
+                      aria-describedby={providerError ? 'custom-provider-error' : undefined}
+                      onChange={(event) => {
+                        setProviderUrl(event.target.value);
+                        setProviderError('');
+                      }}
+                    />
+                    {providerError && (
+                      <FieldError id="custom-provider-error">{providerError}</FieldError>
+                    )}
+                  </Field>
+                  <Button
+                    type="submit"
+                    aria-label="Add custom provider"
+                    className="h-8 shrink-0 px-4"
                     disabled={updating}
-                    required
-                    aria-invalid={!!providerError}
-                    aria-describedby={providerError ? 'custom-provider-error' : undefined}
-                    onChange={(event) => {
-                      setProviderUrl(event.target.value);
-                      setProviderError('');
-                    }}
-                  />
-                  {providerError && (
-                    <FieldError id="custom-provider-error">{providerError}</FieldError>
-                  )}
-                </Field>
-                <Button type="submit" variant="outline" disabled={updating || !providerUrl.trim()}>
-                  {updating ? (
-                    <Spinner data-icon="inline-start" />
-                  ) : (
-                    <Plus data-icon="inline-start" />
-                  )}
-                  Add provider
-                </Button>
+                  >
+                    {updating ? (
+                      <Spinner data-icon="inline-start" />
+                    ) : (
+                      <Plus data-icon="inline-start" />
+                    )}
+                    Add
+                  </Button>
+                </div>
                 {providerNotice && (
                   <FieldDescription role="status">{providerNotice}</FieldDescription>
                 )}
@@ -287,74 +236,38 @@ export function Settings({
       </Card>
       <Card size="sm">
         <CardHeader>
-          <CardTitle>
-            <span className="flex items-center gap-2">
-              <SlidersHorizontal className="size-4 text-primary" />A few personal touches
-            </span>
-          </CardTitle>
-          <CardDescription>Set up your everyday workflow.</CardDescription>
+          <CardTitle className="text-base font-semibold">Appearance</CardTitle>
         </CardHeader>
         <CardContent>
-          <FieldGroup className="gap-5">
-            <Field orientation="horizontal" data-disabled={updating}>
-              <FieldContent>
-                <FieldLabel htmlFor="favorites-first">Favorites first</FieldLabel>
-                <FieldDescription>
-                  Show starred skills at the top of the command palette.
-                </FieldDescription>
-              </FieldContent>
-              <Switch
-                id="favorites-first"
-                disabled={updating}
-                checked={settings.showFavoritesFirst}
-                onCheckedChange={(checked) => void update({ showFavoritesFirst: checked })}
-              />
-            </Field>
-            <Separator />
-            <Field data-disabled={updating}>
-              <FieldLabel id="appearance-label">Appearance</FieldLabel>
-              <ToggleGroup
-                aria-labelledby="appearance-label"
-                variant="outline"
-                value={[settings.theme]}
-                disabled={updating}
-                onValueChange={(values) => {
-                  const theme = values[0];
-                  if (theme === 'light' || theme === 'dark' || theme === 'system')
-                    void update({ theme });
-                }}
-                className="w-full"
-              >
-                <ToggleGroupItem value="light" className="flex-1">
-                  <Sun />
-                  Light
-                </ToggleGroupItem>
-                <ToggleGroupItem value="dark" className="flex-1">
-                  <Moon />
-                  Dark
-                </ToggleGroupItem>
-                <ToggleGroupItem value="system" className="flex-1">
-                  <Monitor />
-                  System
-                </ToggleGroupItem>
-              </ToggleGroup>
-            </Field>
-          </FieldGroup>
+          <ToggleGroup
+            aria-label="Appearance"
+            variant="outline"
+            value={[settings.theme]}
+            disabled={updating}
+            onValueChange={(values) => {
+              const theme = values[0];
+              if (theme === 'light' || theme === 'dark' || theme === 'system')
+                void update({ theme });
+            }}
+            className="w-full"
+          >
+            <ToggleGroupItem value="light" className="flex-1">
+              Light
+            </ToggleGroupItem>
+            <ToggleGroupItem value="dark" className="flex-1">
+              Dark
+            </ToggleGroupItem>
+            <ToggleGroupItem value="system" className="flex-1">
+              System
+            </ToggleGroupItem>
+          </ToggleGroup>
         </CardContent>
       </Card>
       <Card size="sm">
         <CardHeader>
-          <CardTitle>
-            <span className="flex items-center gap-2">
-              <Sparkles className="size-4 text-primary" />
-              Keep a copy
-            </span>
-          </CardTitle>
-          <CardDescription>
-            Download a JSON backup or import skills from an existing one.
-          </CardDescription>
+          <CardTitle className="text-base font-semibold">Back up your skills</CardTitle>
         </CardHeader>
-        <CardFooter className="gap-2">
+        <CardContent className="flex gap-2">
           <Button variant="outline" className="flex-1" onClick={onExport}>
             <Download data-icon="inline-start" />
             Export
@@ -386,16 +299,8 @@ export function Settings({
               }
             }}
           />
-        </CardFooter>
+        </CardContent>
       </Card>
-      <Alert>
-        <ShieldCheck />
-        <AlertTitle>Your ideas stay yours</AlertTitle>
-        <AlertDescription>
-          Skills are stored in this browser. Improve by AI sends your prompt and library metadata to
-          Gemini only when requested.
-        </AlertDescription>
-      </Alert>
     </div>
   );
 }

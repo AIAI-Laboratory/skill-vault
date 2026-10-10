@@ -1,4 +1,5 @@
 import { PageContext } from '../domain/types';
+import { InsertedTextStyle } from './format-inserted-text';
 
 export interface TextRange {
   start: number;
@@ -43,7 +44,7 @@ export interface AIAdapter {
    * Replaces slashRange (or inserts at caret) with rendered prompt text,
    * triggering all necessary DOM input/change events without auto-submitting.
    */
-  insertText(text: string, slashRange?: TextRange): Promise<void>;
+  insertText(text: string, slashRange?: TextRange, style?: InsertedTextStyle): Promise<void>;
 
   /**
    * Returns caret context if available.

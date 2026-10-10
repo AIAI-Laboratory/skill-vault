@@ -61,7 +61,6 @@ export interface SkillVaultSettings {
   enableChatGPT: boolean;
   enableClaude: boolean;
   enableGemini: boolean;
-  showFavoritesFirst: boolean;
   enableDirectShortcuts: boolean;
   theme: 'dark' | 'light' | 'system';
 }
@@ -72,7 +71,6 @@ export const DEFAULT_SETTINGS: SkillVaultSettings = {
   enableChatGPT: true,
   enableClaude: true,
   enableGemini: true,
-  showFavoritesFirst: true,
   enableDirectShortcuts: false,
   theme: 'dark',
 };
