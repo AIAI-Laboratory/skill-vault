@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { version } from '../../package.json';
 import {
   Plus,
   Trash2,
@@ -717,6 +718,10 @@ export const App: React.FC = () => {
             )}
           </main>
         )}
+        <footer className="flex flex-wrap items-center justify-between gap-2 border-t py-3 text-xs text-muted-foreground">
+          <span>© 2026 AIAI</span>
+          <span aria-label={`Version ${version}`}>v{version}</span>
+        </footer>
       </div>
       <Toaster />
     </TooltipProvider>

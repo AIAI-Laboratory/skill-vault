@@ -115,6 +115,8 @@ Open the **Settings** icon in the header. The settings page groups **Appearance*
 
 The **Custom provider URL** and **Gemini API key** inputs are always visible. Choose **Light**, **Dark**, or **System** for appearance. Export and import are available under **Back up your skills**; backups retain skill metadata but exclude credentials.
 
+Every side-panel screen includes a footer with **© 2026 AIAI** and the extension version, kept in sync with `package.json`.
+
 ### Improve by AI with Gemini
 
 Open **Settings → Improve by AI** to save or manage a Gemini API key. Allow access to the Gemini API when Chrome asks. Keys are stored locally, separately from settings and JSON backups, and can be replaced or removed there.
