@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { RotateCcw, Clock3, Trash2, ChevronDown } from 'lucide-react';
+import { RotateCcw, Clock3, Trash2, ChevronRight } from 'lucide-react';
 import { TrashedSkill } from '../../domain/types';
 import { Button } from '@/components/ui/button';
-import { Card, CardTitle } from '@/components/ui/card';
-import { Alert, AlertTitle } from '@/components/ui/alert';
 import {
   Empty,
   EmptyHeader,
@@ -12,6 +10,7 @@ import {
   EmptyDescription,
 } from '@/components/ui/empty';
 import { Spinner } from '@/components/ui/spinner';
+import { cn } from '@/lib/utils';
 
 interface TrashListProps {
   entries: TrashedSkill[];
@@ -21,12 +20,13 @@ interface TrashListProps {
 export function TrashList({ entries, onRestore }: TrashListProps) {
   const [restoring, setRestoring] = useState<string | null>(null);
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Trash</h1>
-      <Alert>
-        <Clock3 />
-        <AlertTitle>Deleted permanently after 24 hours</AlertTitle>
-      </Alert>
+    <div className="flex flex-col gap-6">
+      <header className="flex flex-col gap-2">
+        <h1 className="text-page font-semibold tracking-tight">Trash</h1>
+        <p className="flex items-center gap-2 text-helper text-muted-foreground">
+          <Clock3 className="size-3.5" /> Deleted permanently after 24 hours
+        </p>
+      </header>
       {entries.length === 0 ? (
         <Empty className="min-h-56 border">
           <EmptyHeader>
@@ -40,16 +40,13 @@ export function TrashList({ entries, onRestore }: TrashListProps) {
           </EmptyHeader>
         </Empty>
       ) : (
-        entries.map((entry) => {
-          const isRestoring = restoring === entry.skill.id;
-          const expiresAt = new Date(entry.expiresAt);
-          return (
-            <TrashCard
+        <ul aria-label="Trashed skills">
+          {entries.map((entry) => (
+            <TrashRow
               key={entry.skill.id}
               entry={entry}
-              expiresAt={expiresAt}
               restoring={restoring !== null}
-              isRestoring={isRestoring}
+              isRestoring={restoring === entry.skill.id}
               onRestore={async () => {
                 setRestoring(entry.skill.id);
                 try {
@@ -59,60 +56,48 @@ export function TrashList({ entries, onRestore }: TrashListProps) {
                 }
               }}
             />
-          );
-        })
+          ))}
+        </ul>
       )}
     </div>
   );
 }
 
-function TrashCard({
+function TrashRow({
   entry,
-  expiresAt,
   restoring,
   isRestoring,
   onRestore,
 }: {
   entry: TrashedSkill;
-  expiresAt: Date;
   restoring: boolean;
   isRestoring: boolean;
   onRestore: () => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
-
+  const expiresAt = new Date(entry.expiresAt);
   return (
-    <Card size="sm" className="w-full min-w-0 gap-0 py-0 select-none">
-      <div className="flex min-w-0 items-center justify-between gap-3 p-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <CardTitle className="truncate" title={entry.skill.name}>
-            {entry.skill.name}
-          </CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Auto-deletes{' '}
-            <time dateTime={expiresAt.toISOString()}>{expiresAt.toLocaleString()}</time>
-          </p>
-        </div>
+    <li className="skill-row min-w-0">
+      <div className="flex items-center gap-3 py-4">
         <button
           type="button"
+          aria-label={`View deleted prompt for ${entry.skill.name}`}
           aria-expanded={expanded}
           aria-controls={`trash-prompt-${entry.skill.id}`}
-          className="flex shrink-0 select-none items-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          className="flex min-w-0 flex-1 items-start gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => setExpanded((value) => !value)}
         >
-          {expanded ? 'Hide prompt' : 'Show prompt'}
-          <ChevronDown className={`size-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          <ChevronRight
+            className={cn('mt-1 size-3.5 shrink-0 text-muted-foreground', expanded && 'rotate-90')}
+          />
+          <span className="flex min-w-0 flex-col gap-1">
+            <span className="truncate text-[15px] font-semibold">{entry.skill.name}</span>
+            <span className="text-helper text-muted-foreground">
+              Auto-deletes{' '}
+              <time dateTime={expiresAt.toISOString()}>{expiresAt.toLocaleString()}</time>
+            </span>
+          </span>
         </button>
-      </div>
-      <div
-        id={`trash-prompt-${entry.skill.id}`}
-        className={`${expanded ? 'flex' : 'hidden'} min-w-0 flex-col px-3 pb-3`}
-      >
-        <p className="scrollbar-none max-h-64 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-muted/70 p-3 font-mono text-xs leading-relaxed text-muted-foreground select-text">
-          {entry.skill.content}
-        </p>
-      </div>
-      <div className="flex justify-end px-3 pb-3">
         <Button variant="outline" size="sm" disabled={restoring} onClick={onRestore}>
           {isRestoring ? (
             <Spinner data-icon="inline-start" />
@@ -122,6 +107,14 @@ function TrashCard({
           {isRestoring ? 'Restoring…' : 'Restore'}
         </Button>
       </div>
-    </Card>
+      <pre
+        hidden={!expanded}
+        id={`trash-prompt-${entry.skill.id}`}
+        tabIndex={0}
+        className="skill-prompt mb-4 max-h-64 overflow-y-auto whitespace-pre-wrap break-words rounded-sm p-3 font-mono text-[13px] leading-6"
+      >
+        {entry.skill.content}
+      </pre>
+    </li>
   );
 }

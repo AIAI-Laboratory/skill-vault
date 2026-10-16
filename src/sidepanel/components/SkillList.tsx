@@ -2,6 +2,7 @@ import { BookOpen, Plus, Search, Star } from 'lucide-react';
 import { Skill } from '../../domain/types';
 import { SkillCard } from './SkillCard';
 import { Button } from '@/components/ui/button';
+import type { ToastTone } from '@/components/ui/toast';
 import {
   Empty,
   EmptyHeader,
@@ -14,10 +15,15 @@ import {
 interface SkillListProps {
   skills: Skill[];
   searchQuery: string;
+  selectedTags: string[];
+  onSelectTag: (tag: string) => void;
   onEdit: (skill: Skill) => void;
   onDelete: (id: string) => void;
   onToggleFavorite: (id: string, current: boolean) => void;
-  onShowToast: (msg: string) => void;
+  onTogglePin: (skill: Skill) => void;
+  onDuplicate: (skill: Skill) => void;
+  onRecordUsage: (id: string) => Promise<void>;
+  onShowToast: (msg: string, type?: ToastTone) => void;
   onCreateNew: () => void;
   hasFilters: boolean;
   favoritesOnly: boolean;
@@ -36,7 +42,7 @@ export function SkillList({
   if (skills.length === 0) {
     const Icon = hasFilters ? Search : favoritesOnly ? Star : BookOpen;
     return (
-      <Empty className="min-h-64 border">
+      <Empty className="min-h-64">
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <Icon />
@@ -74,10 +80,10 @@ export function SkillList({
     );
   }
   return (
-    <div className="flex w-full min-w-0 flex-col gap-3">
+    <ul aria-label="Skills" className="skill-list flex w-full min-w-0 flex-col">
       {skills.map((skill) => (
         <SkillCard key={skill.id} skill={skill} searchQuery={searchQuery} {...actions} />
       ))}
-    </div>
+    </ul>
   );
 }

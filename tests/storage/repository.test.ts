@@ -228,4 +228,38 @@ describe('SkillRepository with Mock Storage', () => {
     const importedList = await newRepo.list();
     expect(importedList.length).toBeGreaterThanOrEqual(4);
   });
+  it('keeps usage, collection and pin through backups, trash and restart', async () => {
+    const original = (await repo.list())[0];
+    await repo.update(original.id, { collection: 'Research', pinned: true });
+    await repo.recordUsage(original.id);
+    const expected = await repo.get(original.id);
+    const backup = await repo.exportJson();
+    const restored = new SkillRepository(new MockStorageBackend());
+    expect((await restored.importJson(backup)).errors).toEqual([]);
+    expect(await restored.get(original.id)).toMatchObject({
+      collection: 'Research',
+      pinned: true,
+      usage: expected!.usage,
+    });
+    expect((await restored.search(''))[0].skill.id).toBe(original.id);
+    await restored.remove(original.id);
+    expect(await restored.restore(original.id)).toMatchObject({
+      collection: 'Research',
+      pinned: true,
+      usage: expected!.usage,
+    });
+    const reopened = new SkillRepository(backend);
+    expect(await reopened.get(original.id)).toEqual(expected);
+  });
+
+  it('counts use without changing the last edited timestamp', async () => {
+    vi.useFakeTimers();
+    const original = (await repo.list())[0];
+    vi.setSystemTime(new Date('2026-10-16T01:00:00Z'));
+    await repo.recordUsage(original.id);
+    expect(await repo.get(original.id)).toMatchObject({
+      updatedAt: original.updatedAt,
+      usage: { count: original.usage.count + 1, lastUsedAt: '2026-10-16T01:00:00.000Z' },
+    });
+  });
 });

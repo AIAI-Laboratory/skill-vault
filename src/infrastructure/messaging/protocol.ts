@@ -26,6 +26,7 @@ export type MessageType =
   | 'SKILL_TRASH_LIST'
   | 'SKILL_RESTORE'
   | 'SKILL_RECORD_USAGE'
+  | 'SKILL_IMPORT'
   | 'SETTINGS_GET'
   | 'SETTINGS_UPDATE'
   | 'GET_DRAFT_SKILL'
@@ -57,6 +58,7 @@ export interface MessagePayloadMap {
   SKILL_TRASH_LIST: undefined;
   SKILL_RESTORE: { id: string };
   SKILL_RECORD_USAGE: { id: string };
+  SKILL_IMPORT: { json: string };
   SETTINGS_GET: undefined;
   SETTINGS_UPDATE: Partial<SkillVaultSettings>;
   GET_DRAFT_SKILL: undefined;
@@ -74,6 +76,7 @@ export interface MessageResponseMap {
   SKILL_TRASH_LIST: TrashedSkill[];
   SKILL_RESTORE: Skill;
   SKILL_RECORD_USAGE: boolean;
+  SKILL_IMPORT: { imported: number; errors: string[] };
   SETTINGS_GET: SkillVaultSettings;
   SETTINGS_UPDATE: SkillVaultSettings;
   GET_DRAFT_SKILL: DraftSkill | null;

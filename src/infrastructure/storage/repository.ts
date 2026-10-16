@@ -1,4 +1,5 @@
 import { normalizeProviderUrls } from '../../domain/custom-provider';
+import { normalizeCollection } from '../../domain/library';
 import {
   Skill,
   CreateSkillInput,
@@ -204,6 +205,9 @@ export class SkillRepository {
       throw new Error(validation.errors.join(', '));
     }
 
+    if (updated.collection !== undefined)
+      updated.collection = normalizeCollection(updated.collection);
+
     await this.backend.set({
       [`skill:${id}`]: updated,
     });
@@ -296,7 +300,10 @@ export class SkillRepository {
           skill,
           score: (skill.favorite ? 20 : 0) + Math.min(skill.usage.count * 2, 20),
         }))
-        .sort((a, b) => b.score - a.score);
+        .sort(
+          (a, b) =>
+            Number(Boolean(b.skill.pinned)) - Number(Boolean(a.skill.pinned)) || b.score - a.score
+        );
     }
 
     const results: SkillSearchResult[] = [];
@@ -343,7 +350,10 @@ export class SkillRepository {
       }
     }
 
-    return results.sort((a, b) => b.score - a.score);
+    return results.sort(
+      (a, b) =>
+        Number(Boolean(b.skill.pinned)) - Number(Boolean(a.skill.pinned)) || b.score - a.score
+    );
   }
 
   /**
@@ -353,10 +363,13 @@ export class SkillRepository {
     const skill = await this.get(id);
     if (!skill) return;
 
-    await this.update(id, {
-      usage: {
-        count: (skill.usage.count || 0) + 1,
-        lastUsedAt: new Date().toISOString(),
+    await this.backend.set({
+      [`skill:${id}`]: {
+        ...skill,
+        usage: {
+          count: (skill.usage.count || 0) + 1,
+          lastUsedAt: new Date().toISOString(),
+        },
       },
     });
   }
@@ -448,7 +461,8 @@ export class SkillRepository {
         if (existing) {
           await this.update(item.id, item);
         } else {
-          await this.create(item);
+          const created = await this.create(item);
+          if (item.usage) await this.update(created.id, { usage: item.usage });
         }
         imported++;
       } catch (err: any) {

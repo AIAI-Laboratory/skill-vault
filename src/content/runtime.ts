@@ -6,6 +6,7 @@ import { sendExtensionMessage } from '../infrastructure/messaging/client';
 import { FILL_SELECTION_MESSAGE, FillSelectionMessage } from '../infrastructure/messaging/protocol';
 import { parseSlashCommand } from './slash/parser';
 import { PaletteUI } from './palette/palette-ui';
+import { getSkillLabel, SKILL_DRAG_TYPE } from '../infrastructure/skill-drag';
 
 export class ContentRuntime {
   private registry = AdapterRegistry.getInstance();
@@ -22,6 +23,102 @@ export class ContentRuntime {
   /** Set while the template picker is open for "Fill selection into Skill". */
   private pendingFill: { range: TextRange | null; text: string } | null = null;
   private skillLabels = new Map<string, string>();
+  private dropTarget: HTMLElement | null = null;
+  private dropStyle: HTMLStyleElement | null = null;
+
+  private resolveDropComposer(event: DragEvent): ComposerHandle | null {
+    const types = event.dataTransfer?.types ?? [];
+    if (
+      !this.activeAdapter ||
+      !types.includes(SKILL_DRAG_TYPE) ||
+      types.includes('Files') ||
+      event.dataTransfer!.files.length > 0
+    )
+      return null;
+    let composer = this.resolveComposer(event.target);
+    // Custom sites may have multiple inputs; dropping chooses the target without stealing focus.
+    if (!composer && this.activeAdapter.id === 'generic' && event.target instanceof Element) {
+      const element = event.target.closest<HTMLElement>('textarea, [contenteditable="true"]');
+      if (element)
+        composer = {
+          element,
+          kind: element.tagName === 'TEXTAREA' ? 'textarea' : 'contenteditable',
+          adapterId: 'generic',
+        };
+    }
+    if (
+      composer?.element.matches(
+        ':disabled, [readonly], [aria-disabled="true"], [aria-readonly="true"]'
+      )
+    )
+      return null;
+    return composer;
+  }
+
+  private clearDropTarget = () => {
+    this.dropTarget?.removeAttribute('data-skill-vault-drop-target');
+    this.dropTarget = null;
+  };
+
+  private onDocumentDragOver = (event: DragEvent) => {
+    const composer = this.resolveDropComposer(event);
+    if (!composer) {
+      this.clearDropTarget();
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer!.dropEffect = 'copy';
+    if (this.dropTarget === composer.element) return;
+    this.clearDropTarget();
+    if (!this.dropStyle) {
+      this.dropStyle = document.createElement('style');
+      this.dropStyle.textContent =
+        '[data-skill-vault-drop-target] { outline: 2px solid #ff9757 !important; outline-offset: 3px !important; }';
+      document.head.appendChild(this.dropStyle);
+    }
+    this.dropTarget = composer.element;
+    this.dropTarget.setAttribute('data-skill-vault-drop-target', '');
+  };
+
+  private onDocumentDragLeave = (event: DragEvent) => {
+    if (!(event.relatedTarget instanceof Node) || !this.dropTarget?.contains(event.relatedTarget))
+      this.clearDropTarget();
+  };
+
+  private onDocumentDrop = (event: DragEvent) => {
+    const composer = this.resolveDropComposer(event);
+    this.clearDropTarget();
+    if (!composer || !this.activeAdapter) return;
+    event.preventDefault();
+    // Prevent the chat site from also inserting plain text or treating this as a file upload.
+    event.stopImmediatePropagation();
+    const id = event.dataTransfer!.getData(SKILL_DRAG_TYPE);
+    if (!id || id.length > 256) return;
+    void this.insertDroppedSkill(id, composer, this.activeAdapter);
+  };
+
+  private async insertDroppedSkill(id: string, composer: ComposerHandle, adapter: AIAdapter) {
+    try {
+      // Read from the vault rather than trusting prompt content supplied by a drag payload.
+      const skill = await sendExtensionMessage('SKILL_GET', { id });
+      if (
+        !skill ||
+        this.disposed ||
+        this.activeAdapter !== adapter ||
+        !composer.element.isConnected
+      )
+        return;
+      this.palette.close();
+      this.activeSlashRange = null;
+      this.currentComposer = composer;
+      // Preserve existing chat text; the shared selection flow replaces a trailing /skill command.
+      this.placeCaretAtEnd(composer);
+      await this.handleSkillSelected(skill, true);
+    } catch (error) {
+      if (!this.stopIfExtensionContextInvalidated(error))
+        console.warn('[SkillVault] Failed to drop skill:', error);
+    }
+  }
 
   private onDocumentContextMenu = (e: MouseEvent) => {
     this.capturedSelection = null;
@@ -101,7 +198,12 @@ export class ContentRuntime {
   private expandSkillLabels() {
     const adapter = this.activeAdapter;
     if (!adapter || !this.skillLabels.size) return;
-    const text = adapter.readComposer();
+    const composer = adapter.findComposer();
+    if (!composer) return;
+    // Adapter ranges count DOM text nodes, while innerText may collapse newlines or add
+    // block separators. Use the same offsets when locating compact labels to expand.
+    const text =
+      composer.kind === 'textarea' ? adapter.readComposer() : (composer.element.textContent ?? '');
     const replacements: { start: number; end: number; prompt: string }[] = [];
     for (const [label, prompt] of this.skillLabels) {
       let start = text.indexOf(label);
@@ -173,6 +275,10 @@ export class ContentRuntime {
     document.addEventListener('click', this.onDocumentClick, true);
     document.addEventListener('focusout', this.onDocumentFocusOut, true);
     document.addEventListener('contextmenu', this.onDocumentContextMenu, true);
+    document.addEventListener('dragover', this.onDocumentDragOver, true);
+    document.addEventListener('dragleave', this.onDocumentDragLeave, true);
+    document.addEventListener('drop', this.onDocumentDrop, true);
+    document.addEventListener('dragend', this.clearDropTarget, true);
     chrome.runtime?.onMessage?.addListener(this.onRuntimeMessage);
     const revision = this.settingsRevision;
     void sendExtensionMessage('SETTINGS_GET')
@@ -201,6 +307,7 @@ export class ContentRuntime {
     this.disposeObserver?.();
     this.disposeObserver = null;
     this.currentComposer = null;
+    this.clearDropTarget();
     this.palette.close();
     this.activeAdapter = adapter;
     if (!this.activeAdapter) return;
@@ -251,7 +358,7 @@ export class ContentRuntime {
     }
   }
 
-  private async handleSkillSelected(skill: Skill) {
+  private async handleSkillSelected(skill: Skill, append = false) {
     if (!this.activeAdapter || !this.currentComposer) return;
 
     // Capture target slash range immediately before it can be cleared
@@ -275,11 +382,14 @@ export class ContentRuntime {
     };
 
     const rendered = renderPromptTemplate(skill.content, {}, context);
-    const label = skill.shortcut ? `🏷️ /${skill.shortcut}` : `🏷️ ${skill.name}`;
+    const label = getSkillLabel(skill);
     this.skillLabels.set(label, rendered);
 
     try {
-      await this.activeAdapter.insertText(label, targetRange || undefined, 'highlight');
+      const existing = this.activeAdapter.readComposer();
+      const separator =
+        append && !targetRange && existing.trim() && !existing.endsWith('\n') ? '\n\n' : '';
+      await this.activeAdapter.insertText(separator + label, targetRange || undefined, 'highlight');
       // Record usage asynchronously
       sendExtensionMessage('SKILL_RECORD_USAGE', { id: skill.id }).catch((error) =>
         this.stopIfExtensionContextInvalidated(error)
@@ -386,6 +496,13 @@ export class ContentRuntime {
     document.removeEventListener('click', this.onDocumentClick, true);
     document.removeEventListener('focusout', this.onDocumentFocusOut, true);
     document.removeEventListener('contextmenu', this.onDocumentContextMenu, true);
+    document.removeEventListener('dragover', this.onDocumentDragOver, true);
+    document.removeEventListener('dragleave', this.onDocumentDragLeave, true);
+    document.removeEventListener('drop', this.onDocumentDrop, true);
+    document.removeEventListener('dragend', this.clearDropTarget, true);
+    this.clearDropTarget();
+    this.dropStyle?.remove();
+    this.dropStyle = null;
     try {
       chrome.storage?.onChanged?.removeListener(this.handleSettingsChange);
       chrome.runtime?.onMessage?.removeListener(this.onRuntimeMessage);

@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useState } from 'react';
 import { Search, SlidersHorizontal, Star, X } from 'lucide-react';
 import {
   InputGroup,
@@ -6,122 +6,197 @@ import {
   InputGroupAddon,
   InputGroupButton,
 } from '@/components/ui/input-group';
+import { Popover, PopoverTrigger, PopoverContent, PopoverTitle } from '@/components/ui/popover';
+import { Toggle } from '@/components/ui/toggle';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import {
+  NativeSelect,
+  NativeSelectOption,
+  NativeSelectOptGroup,
+} from '@/components/ui/native-select';
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { SKILL_SORTS, type SkillSort } from '../../domain/library';
 
 interface SearchBarProps {
+  view: string;
+  sort: SkillSort;
+  collections: string[];
+  onViewChange: (view: string) => void;
+  onSortChange: (sort: SkillSort) => void;
+  onReset: () => void;
   value: string;
   onChange: (val: string) => void;
   tags: string[];
-  selectedTag: string | null;
-  onSelectTag: (tag: string | null) => void;
+  selectedTags: string[];
+  onTagsChange: (tags: string[]) => void;
   favoritesOnly: boolean;
   onToggleFavorites: () => void;
 }
 
 export function SearchBar({
+  view,
+  sort,
+  collections,
+  onViewChange,
+  onSortChange,
+  onReset,
   value,
   onChange,
   tags,
-  selectedTag,
-  onSelectTag,
+  selectedTags,
+  onTagsChange,
   favoritesOnly,
   onToggleFavorites,
 }: SearchBarProps) {
-  const filterRef = useRef<HTMLDetailsElement>(null);
-  const quickTags = selectedTag
-    ? [selectedTag, ...tags.filter((tag) => tag !== selectedTag)].slice(0, 4)
-    : tags.slice(0, 4);
-  const selectTag = (tag: string | null) => {
-    onSelectTag(tag);
-    if (filterRef.current) filterRef.current.open = false;
-  };
-
+  const [filterOpen, setFilterOpen] = useState(false);
+  const hasFilters = Boolean(
+    selectedTags.length || favoritesOnly || view !== 'all' || sort !== 'newest'
+  );
   return (
-    <div className="flex min-w-0 flex-col gap-2">
-      <div className="flex min-w-0 gap-2">
-        <InputGroup className="h-10 flex-1 bg-muted dark:bg-muted">
-          <InputGroupAddon>
-            <Search />
-          </InputGroupAddon>
-          <InputGroupInput
-            type="search"
-            className="[&::-webkit-search-cancel-button]:hidden"
-            aria-label="Search skills"
-            placeholder="Search skills…"
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-          />
+    <div className="flex min-w-0 flex-col gap-2.5">
+      <InputGroup className="h-10">
+        <InputGroupAddon>
+          <Search />
+        </InputGroupAddon>
+        <InputGroupInput
+          type="search"
+          className="[&::-webkit-search-cancel-button]:hidden"
+          aria-label="Search skills"
+          placeholder="Search name, /command, #tag #tag…"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <InputGroupAddon align="inline-end">
           {value && (
-            <InputGroupAddon align="inline-end">
-              <InputGroupButton
-                size="icon-xs"
-                aria-label="Clear search"
-                onClick={() => onChange('')}
-              >
-                <X />
-              </InputGroupButton>
-            </InputGroupAddon>
+            <InputGroupButton size="icon-sm" aria-label="Clear search" onClick={() => onChange('')}>
+              <X />
+            </InputGroupButton>
           )}
-        </InputGroup>
-        <details ref={filterRef} className="relative shrink-0">
-          <summary
-            aria-label="Filter by tag"
-            className="flex h-10 list-none select-none cursor-pointer items-center gap-2 rounded-lg border border-input bg-muted px-3 text-sm font-medium marker:content-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden dark:bg-muted"
-          >
-            <SlidersHorizontal className="size-4" />
-            <span>Filter</span>
-            {(selectedTag || favoritesOnly) && (
-              <span className="size-1.5 rounded-full bg-primary" />
-            )}
-          </summary>
-          <div className="absolute right-0 z-20 mt-2 w-64 max-w-[calc(100vw-2.5rem)] rounded-lg border border-border bg-popover p-2 text-popover-foreground">
-            <button
-              type="button"
-              aria-pressed={favoritesOnly}
-              className={`mb-2 flex w-full select-none items-center gap-2 rounded-md border px-2.5 py-2 text-left text-sm ${favoritesOnly ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-muted hover:bg-accent'}`}
-              onClick={onToggleFavorites}
+          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+            <PopoverTrigger
+              render={
+                <InputGroupButton
+                  size="icon-sm"
+                  className="relative"
+                  aria-label={hasFilters ? 'Filters (active)' : 'Filters'}
+                />
+              }
             >
-              <Star className="size-4" />
-              Favorites only
-            </button>
-            <div className="scrollbar-none flex max-h-48 flex-wrap gap-2 overflow-y-auto">
-              <button
-                type="button"
-                aria-pressed={!selectedTag}
-                className={`max-w-full select-none rounded-md border px-2.5 py-1.5 text-sm ${!selectedTag ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-muted hover:bg-accent'}`}
-                onClick={() => selectTag(null)}
+              <SlidersHorizontal />
+              {hasFilters && (
+                <span className="absolute top-1 right-1 size-1.5 rounded-sm bg-primary" />
+              )}
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              className="max-h-[calc(100dvh-8rem)] max-w-[calc(100vw-2rem)] gap-3 overflow-y-auto p-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <PopoverTitle>Filters</PopoverTitle>
+                <Button size="xs" variant="ghost" disabled={!hasFilters} onClick={onReset}>
+                  Reset
+                </Button>
+              </div>
+              <FieldGroup className="gap-3">
+                <Field className="gap-1.5">
+                  <FieldLabel htmlFor="library-view">Collection or view</FieldLabel>
+                  <NativeSelect
+                    id="library-view"
+                    className="w-full"
+                    aria-label="Collection or view"
+                    value={view}
+                    onChange={(event) => onViewChange(event.target.value)}
+                  >
+                    <NativeSelectOption value="all">All skills</NativeSelectOption>
+                    <NativeSelectOption value="recent">Recently used</NativeSelectOption>
+                    <NativeSelectOptGroup label="Collections">
+                      {collections.map((name) => (
+                        <NativeSelectOption key={name} value={`collection:${name}`}>
+                          {name}
+                        </NativeSelectOption>
+                      ))}
+                      <NativeSelectOption value="collection:">Unassigned</NativeSelectOption>
+                    </NativeSelectOptGroup>
+                  </NativeSelect>
+                </Field>
+                <Field className="gap-1.5">
+                  <FieldLabel htmlFor="library-sort">Sort by</FieldLabel>
+                  <NativeSelect
+                    id="library-sort"
+                    className="w-full"
+                    aria-label="Sort skills"
+                    value={view === 'recent' ? 'recent' : sort}
+                    disabled={view === 'recent'}
+                    onChange={(event) => onSortChange(event.target.value as SkillSort)}
+                  >
+                    {Object.entries(SKILL_SORTS).map(([value, label]) => (
+                      <NativeSelectOption key={value} value={value}>
+                        {label}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </Field>
+              </FieldGroup>
+              <Toggle
+                pressed={favoritesOnly}
+                onPressedChange={onToggleFavorites}
+                className="w-full justify-start"
               >
-                All tags
-              </button>
-              {tags.map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  aria-pressed={selectedTag === tag}
-                  title={tag}
-                  className={`max-w-full select-none rounded-md border px-2.5 py-1.5 text-sm ${selectedTag === tag ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-muted hover:bg-accent'}`}
-                  onClick={() => selectTag(tag)}
-                >
-                  <span className="block max-w-40 truncate">#{tag}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </details>
-      </div>
-      {quickTags.length > 0 && (
-        <div role="group" aria-label="Quick tag filters" className="flex flex-wrap gap-2">
-          {quickTags.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              aria-pressed={selectedTag === tag}
-              className={`max-w-full rounded-md border px-2.5 py-1 text-sm ${selectedTag === tag ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-muted hover:bg-accent'}`}
-              onClick={() => onSelectTag(selectedTag === tag ? null : tag)}
-            >
-              <span className="block max-w-32 truncate">#{tag}</span>
-            </button>
-          ))}
+                <Star /> Favorites only
+              </Toggle>
+              <Separator />
+              <p className="text-xs text-muted-foreground">Tags · Match all selected</p>
+              <ToggleGroup
+                aria-label="Filter by tag"
+                variant="tag"
+                multiple
+                value={selectedTags}
+                onValueChange={onTagsChange}
+                className="max-h-56 w-full flex-wrap justify-start overflow-y-auto"
+                spacing={1}
+              >
+                {tags.map((tag) => (
+                  <ToggleGroupItem key={tag} value={tag} title={tag}>
+                    <span className="max-w-44 truncate">#{tag}</span>
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+            </PopoverContent>
+          </Popover>
+        </InputGroupAddon>
+      </InputGroup>
+      {tags.length > 0 && (
+        <div className="scrollbar-none scroll-fade-x scroll-fade-4 min-w-0 overflow-x-auto pb-1">
+          <ToggleGroup
+            aria-label="Quick tag filters"
+            variant="tag-filter"
+            multiple
+            value={selectedTags}
+            onValueChange={onTagsChange}
+            spacing={1}
+          >
+            {tags.map((tag) => (
+              <ToggleGroupItem key={tag} value={tag} title={tag}>
+                <span className="max-w-36 truncate">#{tag}</span>
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
         </div>
+      )}
+      {selectedTags.length > 0 && (
+        <p className="text-xs text-muted-foreground" aria-live="polite">
+          Filtering:{' '}
+          <span className="font-mono text-primary">
+            {selectedTags.map((tag) => `#${tag}`).join(' + ')}
+          </span>
+        </p>
+      )}
+      {favoritesOnly && (
+        <Button variant="ghost" size="xs" className="w-fit" onClick={onToggleFavorites}>
+          <Star data-icon="inline-start" /> Favorites only <X data-icon="inline-end" />
+        </Button>
       )}
     </div>
   );

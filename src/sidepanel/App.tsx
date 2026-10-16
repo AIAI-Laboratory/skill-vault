@@ -5,14 +5,18 @@ import {
   Settings as SettingsIcon,
   AlertCircle,
   Layers3,
-  BookOpen,
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import { Toaster, toast } from '@/components/ui/toast';
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Toaster, toast, type ToastTone } from '@/components/ui/toast';
 import {
   Skill,
   TrashedSkill,
@@ -23,6 +27,13 @@ import {
 import { DraftSkill } from '../domain/types';
 import { sendExtensionMessage } from '../infrastructure/messaging/client';
 import { SkillRepository } from '../infrastructure/storage/repository';
+import {
+  DEFAULT_COLLECTIONS,
+  getSkillCollection,
+  sortSkills,
+  matchesSkillSearch,
+  type SkillSort,
+} from '../domain/library';
 import { SearchBar } from './components/SearchBar';
 import { SkillList } from './components/SkillList';
 import { SkillEditor } from './components/SkillEditor';
@@ -30,6 +41,7 @@ import { Settings } from './components/Settings';
 import { TrashList } from './components/TrashList';
 
 type ActiveTab = 'all' | 'trash' | 'settings';
+const PAGE_SIZES = [5, 10, 20, 50];
 
 export const App: React.FC = () => {
   const [geminiConfigured, setGeminiConfigured] = useState(false);
@@ -39,7 +51,12 @@ export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('all');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [view, setView] = useState('all');
+  const [sort, setSort] = useState<SkillSort>('newest');
+  const [duplicateSkill, setDuplicateSkill] = useState<Skill | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Editor State
   const [isEditing, setIsEditing] = useState(false);
@@ -50,8 +67,8 @@ export const App: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const showToast = (title: string) => {
-    toast.add({ title });
+  const showToast = (title: string, type: ToastTone = 'success') => {
+    toast.add({ title, type });
   };
 
   useEffect(() => {
@@ -115,6 +132,7 @@ export const App: React.FC = () => {
         const isRecent = !draft.timestamp || Date.now() - draft.timestamp < 15 * 60 * 1000;
         if (isRecent) {
           setEditingSkill(null);
+          setDuplicateSkill(null);
           setIsEditing(true);
         }
       }
@@ -138,12 +156,13 @@ export const App: React.FC = () => {
           setDraftSkill(newDraft);
           // New draft arrived from context menu! Open editor immediately with draft
           setEditingSkill(null);
+          setDuplicateSkill(null);
           setIsEditing(true);
         } else if (changes['draft:skill'] && !changes['draft:skill'].newValue) {
           setDraftSkill(null);
         }
         if (changes['credentials:gemini']) void loadGeminiStatus();
-        if (changes['skill:index']) {
+        if (Object.keys(changes).some((key) => key.startsWith('skill:') && key !== 'skill:trash')) {
           loadSkills();
         }
         if (changes['skill:trash']) {
@@ -174,33 +193,43 @@ export const App: React.FC = () => {
     );
   }, [skills]);
 
-  // Filter skills based on tab, search, and tag
+  const collections = useMemo(
+    () => [...new Set([...DEFAULT_COLLECTIONS, ...skills.map(getSkillCollection).filter(Boolean)])],
+    [skills]
+  );
+
+  // Filter the complete vault before sorting and pagination.
   const filteredSkills = useMemo(() => {
-    return skills.filter((skill) => {
+    const filtered = skills.filter((skill) => {
+      if (view === 'recent' && !skill.usage.lastUsedAt) return false;
+      if (
+        view.startsWith('collection:') &&
+        getSkillCollection(skill) !== view.slice('collection:'.length)
+      )
+        return false;
       // Tab filter
       if (favoritesOnly && !skill.favorite) {
         return false;
       }
 
-      // Tag filter
-      if (selectedTag && !skill.tags.includes(selectedTag)) {
-        return false;
-      }
-
-      // Search query filter
-      if (searchQuery.trim()) {
-        const q = searchQuery.trim().toLowerCase().replace(/^\//, '');
-        const matchName = skill.name.toLowerCase().includes(q);
-        const matchDesc = (skill.description || '').toLowerCase().includes(q);
-        const matchTag = skill.tags.some((t) => t.toLowerCase().includes(q));
-        if (!matchName && !matchDesc && !matchTag) {
-          return false;
-        }
-      }
+      if (!selectedTags.every((tag) => skill.tags.includes(tag))) return false;
+      if (!matchesSkillSearch(skill, searchQuery)) return false;
 
       return true;
     });
-  }, [skills, favoritesOnly, selectedTag, searchQuery]);
+    return sortSkills(filtered, view === 'recent' ? 'recent' : sort);
+  }, [skills, favoritesOnly, selectedTags, searchQuery, view, sort]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredSkills.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  // Keep the last page valid after deleting a skill or refreshing the vault.
+  if (page !== currentPage) setPage(currentPage);
+  const pageStart = (currentPage - 1) * pageSize;
+  const visibleSkills = filteredSkills.slice(pageStart, pageStart + pageSize);
+  const changePage = (nextPage: number) => {
+    setPage(nextPage);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
 
   // Save or update skill
   const handleSaveSkill = async (skillData: CreateSkillInput, id?: string) => {
@@ -209,10 +238,14 @@ export const App: React.FC = () => {
       showToast(`Updated "${skillData.name}"`);
     } else {
       await sendExtensionMessage('SKILL_CREATE', skillData);
+      setPage(1);
+      setSort('newest');
+      clearFilters();
       showToast(`Created "${skillData.name}"`);
     }
     setIsEditing(false);
     setEditingSkill(null);
+    setDuplicateSkill(null);
     await loadSkills();
   };
 
@@ -220,10 +253,27 @@ export const App: React.FC = () => {
   const handleDeleteSkill = async (id: string) => {
     try {
       await sendExtensionMessage('SKILL_DELETE', { id });
-      showToast('Moved to trash. Automatically deleted after 24 hours.');
-      await Promise.all([loadSkills(), loadTrash()]);
+      const updatedTrash = await sendExtensionMessage('SKILL_TRASH_LIST');
+      setTrash(updatedTrash);
+      await loadSkills();
+      const entry = updatedTrash.find((item) => item.skill.id === id);
+      const toastId = toast.add({
+        title: 'Skill moved to trash',
+        type: 'info',
+        description: 'Automatically deleted after 24 hours.',
+        timeout: 8000,
+        actionProps: entry
+          ? {
+              children: 'Undo',
+              onClick: () => {
+                toast.close(toastId);
+                void handleRestoreSkill(entry);
+              },
+            }
+          : undefined,
+      });
     } catch (err: any) {
-      showToast(err.message || 'Failed to delete');
+      showToast(err.message || 'Failed to delete', 'error');
     }
   };
 
@@ -233,10 +283,11 @@ export const App: React.FC = () => {
       showToast(
         entry.skill.shortcut && !restored.shortcut
           ? 'Skill restored without its shortcut because it is already in use.'
-          : 'Skill restored'
+          : 'Skill restored',
+        entry.skill.shortcut && !restored.shortcut ? 'warning' : 'success'
       );
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to restore');
+      showToast(err instanceof Error ? err.message : 'Failed to restore', 'error');
     }
     await Promise.all([loadSkills(), loadTrash()]);
   };
@@ -247,13 +298,14 @@ export const App: React.FC = () => {
       await sendExtensionMessage('SKILL_UPDATE', { id, patch: { favorite: !current } });
       await loadSkills();
     } catch (err: any) {
-      showToast(err.message || 'Failed to update favorite');
+      showToast(err.message || 'Failed to update favorite', 'error');
     }
   };
 
   // Start creating from draft
   const handleUseDraft = () => {
     setEditingSkill(null);
+    setDuplicateSkill(null);
     setIsEditing(true);
   };
 
@@ -283,69 +335,143 @@ export const App: React.FC = () => {
   // Import JSON backup
   const handleImport = async (file: File) => {
     try {
-      const text = await file.text();
-      const parsed = JSON.parse(text);
-      const skillsToImport: any[] = Array.isArray(parsed) ? parsed : parsed.skills;
-
-      if (!Array.isArray(skillsToImport)) {
-        throw new Error('Invalid backup file: no skills found.');
-      }
-
-      let count = 0;
-      for (const item of skillsToImport) {
-        try {
-          if (item.id) {
-            await sendExtensionMessage('SKILL_CREATE', item);
-            count++;
-          }
-        } catch {
-          // ignore duplicate shortcut or id errors during batch import
-        }
-      }
-
+      const result = await sendExtensionMessage('SKILL_IMPORT', { json: await file.text() });
       await loadSkills();
-      showToast(`Imported ${count} skills!`);
-    } catch (err: any) {
-      showToast(err.message || 'Import failed');
+      setPage(1);
+      toast.add({
+        title: `Imported ${result.imported} skills`,
+        type: result.errors.length ? 'warning' : 'success',
+        description: result.errors.length ? result.errors.slice(0, 3).join('; ') : undefined,
+      });
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Import failed', 'error');
+    }
+  };
+
+  const handleRecordUsage = async (id: string) => {
+    try {
+      await sendExtensionMessage('SKILL_RECORD_USAGE', { id });
+      await loadSkills();
+    } catch {
+      showToast('Prompt copied, but usage could not be saved.', 'warning');
+    }
+  };
+
+  const handleTogglePin = async (skill: Skill) => {
+    try {
+      await sendExtensionMessage('SKILL_UPDATE', {
+        id: skill.id,
+        patch: { pinned: !skill.pinned },
+      });
+      await loadSkills();
+      setPage(1);
+      showToast(skill.pinned ? 'Skill unpinned' : 'Skill pinned to top');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not update pin', 'error');
     }
   };
 
   const createSkill = () => {
+    setActiveTab('all');
     setEditingSkill(null);
+    setDuplicateSkill(null);
     setIsEditing(true);
   };
-  const hasFilters = Boolean(searchQuery.trim() || selectedTag || favoritesOnly);
+  const hasFilters = Boolean(
+    searchQuery.trim() ||
+    selectedTags.length > 0 ||
+    favoritesOnly ||
+    view !== 'all' ||
+    sort !== 'newest'
+  );
   const clearFilters = () => {
+    setView('all');
+    setSort('newest');
+    setPage(1);
     setSearchQuery('');
-    setSelectedTag(null);
+    setSelectedTags([]);
     setFavoritesOnly(false);
   };
 
   const searchBar = (
     <SearchBar
       value={searchQuery}
-      onChange={setSearchQuery}
+      onChange={(query) => {
+        setSearchQuery(query);
+        setPage(1);
+      }}
+      view={view}
+      sort={sort}
+      collections={collections}
+      onViewChange={(nextView) => {
+        setView(nextView);
+        setPage(1);
+      }}
+      onSortChange={(nextSort) => {
+        setSort(nextSort);
+        setPage(1);
+      }}
+      onReset={clearFilters}
       tags={allTags}
-      selectedTag={selectedTag}
-      onSelectTag={setSelectedTag}
+      selectedTags={selectedTags}
+      onTagsChange={(tags) => {
+        setSelectedTags(tags);
+        setPage(1);
+      }}
       favoritesOnly={favoritesOnly}
-      onToggleFavorites={() => setFavoritesOnly((value) => !value)}
+      onToggleFavorites={() => {
+        setFavoritesOnly((value) => !value);
+        setPage(1);
+      }}
     />
   );
 
   const library = (
-    <div className="flex flex-col gap-6">
-      <span className="sr-only" aria-live="polite">
-        {filteredSkills.length} {filteredSkills.length === 1 ? 'skill' : 'skills'}
-        {hasFilters ? ' found' : ''}
-      </span>
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-3 pb-4 pt-3 text-helper text-muted-foreground">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h1 className="text-page font-semibold tracking-tight text-foreground">
+            {view === 'recent'
+              ? 'Recently used'
+              : view.startsWith('collection:')
+                ? view.slice('collection:'.length) || 'Unassigned'
+                : 'Skills'}
+          </h1>
+          <span aria-live="polite">
+            {filteredSkills.length > 0 &&
+              `${pageStart + 1}–${pageStart + visibleSkills.length} of `}
+            {filteredSkills.length} {filteredSkills.length === 1 ? 'skill' : 'skills'}
+            {hasFilters ? ' found' : ''}
+          </span>
+        </div>
+        {hasFilters && (
+          <Button variant="ghost" size="xs" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        )}
+      </div>
       <SkillList
-        skills={filteredSkills}
+        skills={visibleSkills}
         searchQuery={searchQuery}
+        selectedTags={selectedTags}
+        onSelectTag={(tag) => {
+          setSelectedTags((tags) =>
+            tags.includes(tag) ? tags.filter((item) => item !== tag) : [...tags, tag]
+          );
+          changePage(1);
+        }}
         onEdit={(skill) => {
           setEditingSkill(skill);
+          setDuplicateSkill(null);
           setIsEditing(true);
         }}
+        onDuplicate={(skill) => {
+          setEditingSkill(null);
+          setDuplicateSkill(skill);
+          setIsEditing(true);
+        }}
+        onTogglePin={handleTogglePin}
+        onRecordUsage={handleRecordUsage}
         onDelete={handleDeleteSkill}
         onToggleFavorite={handleToggleFavorite}
         onShowToast={showToast}
@@ -354,101 +480,174 @@ export const App: React.FC = () => {
         favoritesOnly={favoritesOnly}
         onClearFilters={clearFilters}
       />
+      {filteredSkills.length > 0 && (
+        <nav
+          aria-label="Skill pagination"
+          className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 pt-4"
+        >
+          <FieldGroup className="w-auto">
+            <Field orientation="horizontal" className="items-center gap-2">
+              <FieldLabel htmlFor="skills-per-page" className="whitespace-nowrap">
+                Per page
+              </FieldLabel>
+              <NativeSelect
+                id="skills-per-page"
+                className="w-16 shrink-0"
+                aria-label="Skills per page"
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value));
+                  changePage(1);
+                }}
+              >
+                {PAGE_SIZES.map((size) => (
+                  <NativeSelectOption key={size} value={size}>
+                    {size}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </Field>
+          </FieldGroup>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Previous page"
+              disabled={currentPage === 1}
+              onClick={() => changePage(currentPage - 1)}
+            >
+              <ChevronLeft />
+            </Button>
+            <span
+              role="status"
+              aria-label="Current page"
+              className="text-xs tabular-nums text-muted-foreground"
+            >
+              {currentPage} / {totalPages}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Next page"
+              disabled={currentPage === totalPages}
+              onClick={() => changePage(currentPage + 1)}
+            >
+              <ChevronRight />
+            </Button>
+          </div>
+        </nav>
+      )}
     </div>
   );
 
   return (
     <TooltipProvider delay={300}>
-      <div className="mx-auto flex min-h-dvh w-full min-w-0 max-w-2xl flex-col overflow-x-clip">
+      <div className="vault-shell mx-auto flex min-h-dvh w-full min-w-0 max-w-4xl flex-col px-4 sm:px-8">
         <div className="sticky top-0 z-30 bg-background">
-          <header className="flex items-center justify-between gap-3 px-4 py-3">
+          <header className="flex min-h-18 items-center justify-between gap-2 py-4">
             <button
               type="button"
-              className="flex min-w-0 select-none items-center gap-2.5 rounded-md text-left"
-              aria-label="Vault"
+              className="flex min-w-0 items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Back to vault"
+              disabled={isEditing}
               onClick={() => setActiveTab('all')}
             >
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-                <Layers3 className="size-[18px]" />
-              </div>
-              <p className="text-base font-semibold tracking-tight">Skill Vault</p>
+              <Layers3 aria-hidden="true" className="size-5 shrink-0 text-primary" />
+              <span className="truncate text-base font-semibold tracking-tight">Skill Vault</span>
             </button>
             {!isEditing && (
-              <Button onClick={createSkill}>
-                <Plus data-icon="inline-start" />
-                New skill
-              </Button>
+              <div className="flex shrink-0 items-center gap-1">
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Trash"
+                        aria-current={activeTab === 'trash' ? 'page' : undefined}
+                        onClick={() => {
+                          setActiveTab('trash');
+                          void loadTrash();
+                        }}
+                      />
+                    }
+                  >
+                    <Trash2 />
+                  </TooltipTrigger>
+                  <TooltipContent>Trash</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Settings"
+                        aria-current={activeTab === 'settings' ? 'page' : undefined}
+                        onClick={() => setActiveTab('settings')}
+                      />
+                    }
+                  >
+                    <SettingsIcon />
+                  </TooltipTrigger>
+                  <TooltipContent>Settings</TooltipContent>
+                </Tooltip>
+                <Button className="ml-2" aria-label="New skill" onClick={createSkill}>
+                  <Plus data-icon="inline-start" />
+                  <span className="new-skill-label">New skill</span>
+                </Button>
+              </div>
             )}
           </header>
+          {!isEditing && activeTab === 'all' && <div className="pb-3 pt-1">{searchBar}</div>}
           <Separator />
-          {!isEditing && (
-            <nav className="px-4 py-3" aria-label="Vault navigation">
-              <div className="flex h-12 w-full gap-1 rounded-xl bg-muted p-1.5">
-                <button
-                  type="button"
-                  aria-current={activeTab === 'all' ? 'page' : undefined}
-                  className={`flex min-w-0 flex-1 select-none items-center justify-center gap-2 rounded-lg px-2 text-sm font-medium transition-colors ${activeTab === 'all' ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'}`}
-                  onClick={() => setActiveTab('all')}
-                >
-                  <BookOpen className="size-[18px]" />
-                  Vault
-                </button>
-                <button
-                  type="button"
-                  aria-current={activeTab === 'trash' ? 'page' : undefined}
-                  className={`flex min-w-0 flex-1 select-none items-center justify-center gap-2 rounded-lg px-2 text-sm font-medium transition-colors ${activeTab === 'trash' ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'}`}
-                  onClick={() => {
-                    setActiveTab('trash');
-                    void loadTrash();
-                  }}
-                >
-                  <Trash2 className="size-[18px]" />
-                  Trash
-                </button>
-                <button
-                  type="button"
-                  aria-current={activeTab === 'settings' ? 'page' : undefined}
-                  className={`flex min-w-0 flex-1 select-none items-center justify-center gap-2 rounded-lg px-2 text-sm font-medium transition-colors ${activeTab === 'settings' ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'}`}
-                  onClick={() => setActiveTab('settings')}
-                >
-                  <SettingsIcon className="size-[18px]" />
-                  Settings
-                </button>
-              </div>
-            </nav>
-          )}
-          {!isEditing && activeTab === 'all' && <div className="px-5 pb-3">{searchBar}</div>}
         </div>
         {isEditing ? (
-          <main className="flex-1 p-5">
+          <main className="flex-1 py-6">
             <SkillEditor
               key={
                 editingSkill?.id ||
+                (duplicateSkill ? `duplicate-${duplicateSkill.id}` : '') ||
                 (draftSkill ? `draft-${draftSkill.timestamp || draftSkill.content}` : 'new')
               }
               geminiConfigured={geminiConfigured}
-              onGeminiKeyChanged={setGeminiConfigured}
               initialSkill={editingSkill}
-              initialDraftContent={!editingSkill ? draftSkill?.content : undefined}
-              draftSkill={!editingSkill ? draftSkill : null}
+              duplicateOf={duplicateSkill}
+              collections={collections}
+              availableTags={allTags}
+              initialDraftContent={
+                !editingSkill && !duplicateSkill ? draftSkill?.content : undefined
+              }
+              draftSkill={!editingSkill && !duplicateSkill ? draftSkill : null}
               draftMeta={
-                !editingSkill && draftSkill
+                !editingSkill && !duplicateSkill && draftSkill
                   ? { title: draftSkill.title, url: draftSkill.url }
                   : null
               }
               onSave={async (data, id) => {
                 await handleSaveSkill(data, id);
-                if (draftSkill) await handleDismissDraft();
+                if (draftSkill && !duplicateSkill) await handleDismissDraft();
               }}
               onCancel={async () => {
                 setIsEditing(false);
                 setEditingSkill(null);
-                if (draftSkill) await handleDismissDraft();
+                setDuplicateSkill(null);
+                if (draftSkill && !duplicateSkill) await handleDismissDraft();
               }}
             />
           </main>
         ) : (
-          <main className="flex flex-1 flex-col px-5 pt-5 pb-6">
+          <main className="flex flex-1 flex-col pb-8 pt-4">
+            {activeTab !== 'all' && (
+              <Button
+                variant="ghost"
+                className="-ml-2 mb-5 w-fit"
+                onClick={() => setActiveTab('all')}
+              >
+                <ArrowLeft data-icon="inline-start" />
+                Back to vault
+              </Button>
+            )}
             {draftSkill && (
               <Alert className="mb-5">
                 <AlertCircle />
@@ -486,9 +685,9 @@ export const App: React.FC = () => {
             {activeTab === 'all' &&
               (loading ? (
                 <div className="flex flex-col gap-4" role="status" aria-label="Loading skills">
-                  <Skeleton className="h-16 w-full" />
-                  <Skeleton className="h-36 w-full" />
-                  <Skeleton className="h-36 w-full" />
+                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-20 w-full" />
                 </div>
               ) : (
                 library
@@ -505,7 +704,10 @@ export const App: React.FC = () => {
                     setSettings(updated);
                     showToast('Settings saved');
                   } catch (err) {
-                    showToast(err instanceof Error ? err.message : 'Could not save settings');
+                    showToast(
+                      err instanceof Error ? err.message : 'Could not save settings',
+                      'error'
+                    );
                     throw err;
                   }
                 }}

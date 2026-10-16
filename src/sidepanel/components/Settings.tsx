@@ -5,7 +5,7 @@ import { useRef, useState } from 'react';
 import { Plus, Trash2, Download, Upload } from 'lucide-react';
 import { SkillVaultSettings } from '../../domain/types';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import {
   Field,
   FieldError,
@@ -105,29 +105,55 @@ export function Settings({
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-      <Card size="sm">
-        <CardHeader>
-          <CardTitle className="text-base font-semibold">Improve by AI</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-2">
-          <GeminiKeySettings configured={geminiConfigured} onChanged={onGeminiKeyChanged} />
-        </CardContent>
-      </Card>
-      <Card size="sm">
-        <CardHeader>
-          <CardTitle className="text-base font-semibold">AI connections</CardTitle>
-        </CardHeader>
-        <CardContent>
+    <div className="settings-page">
+      <header className="mb-6">
+        <h1 className="text-page font-semibold tracking-tight">Settings</h1>
+      </header>
+      <section className="settings-section" aria-labelledby="appearance-title">
+        <h2 id="appearance-title" className="text-section font-semibold">
+          Appearance
+        </h2>
+        <ToggleGroup
+          aria-label="Appearance"
+          variant="outline"
+          value={[settings.theme]}
+          disabled={updating}
+          onValueChange={(values) => {
+            const theme = values[0];
+            if (theme === 'light' || theme === 'dark' || theme === 'system') void update({ theme });
+          }}
+          className="w-full sm:w-fit"
+        >
+          <ToggleGroupItem value="light" className="flex-1">
+            Light
+          </ToggleGroupItem>
+          <ToggleGroupItem value="dark" className="flex-1">
+            Dark
+          </ToggleGroupItem>
+          <ToggleGroupItem value="system" className="flex-1">
+            System
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </section>
+      <Separator />
+      <section className="settings-section" aria-labelledby="connections-title">
+        <div className="flex flex-col gap-1.5">
+          <h2 id="connections-title" className="text-section font-semibold">
+            AI connections
+          </h2>
+          <p className="text-helper text-muted-foreground">
+            Choose where <code>/skill</code> is available in your browser.
+          </p>
+        </div>
+        <div className="flex min-w-0 flex-col gap-3">
           <FieldSet>
             <FieldLegend className="sr-only">Supported AI providers</FieldLegend>
-            <FieldGroup className="gap-2">
+            <FieldGroup className="divide-y divide-border/60 gap-0">
               {providers.map((provider) => (
                 <Field
                   key={provider.key}
                   orientation="horizontal"
-                  className="items-center rounded-lg bg-muted px-3 py-2.5"
+                  className="min-h-10 items-center py-2"
                   data-disabled={updating}
                 >
                   <FieldLabel htmlFor={provider.key}>{provider.name}</FieldLabel>
@@ -139,6 +165,11 @@ export function Settings({
                   />
                 </Field>
               ))}
+            </FieldGroup>
+          </FieldSet>
+          <FieldSet className="mt-2 gap-3">
+            <FieldLegend className="sr-only">Custom providers</FieldLegend>
+            <div className="flex flex-col gap-4">
               {settings.customProviderUrls.map((url, index) => {
                 const id = `custom-provider-${index}`;
                 const host = new URL(url).host;
@@ -146,7 +177,7 @@ export function Settings({
                   <Field
                     key={url}
                     orientation="horizontal"
-                    className="items-center rounded-lg bg-muted px-3 py-2.5"
+                    className="items-center"
                     data-disabled={updating}
                   >
                     <FieldLabel htmlFor={id} className="min-w-0 flex-1 truncate" title={host}>
@@ -155,7 +186,7 @@ export function Settings({
                     <div className="flex shrink-0 items-center gap-2">
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="quiet"
                         size="icon-sm"
                         aria-label={`Remove ${url}`}
                         disabled={updating}
@@ -173,108 +204,88 @@ export function Settings({
                   </Field>
                 );
               })}
-            </FieldGroup>
-          </FieldSet>
-          <FieldSet className="mt-5 gap-3">
-            <FieldLegend className="mb-0 font-semibold">Custom providers</FieldLegend>
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                void addProvider();
-              }}
-            >
-              <FieldGroup className="gap-3">
-                <div className="flex flex-wrap items-end gap-2">
-                  <Field
-                    className="min-w-0 flex-1"
-                    data-invalid={!!providerError}
-                    data-disabled={updating}
-                  >
-                    <FieldLabel className="sr-only" htmlFor="custom-provider-url">
-                      Provider URL
-                    </FieldLabel>
-                    <Input
-                      id="custom-provider-url"
-                      type="url"
-                      className="bg-muted"
-                      placeholder="https://chat.example.com"
-                      value={providerUrl}
-                      disabled={updating}
-                      required
-                      aria-invalid={!!providerError}
-                      aria-describedby={providerError ? 'custom-provider-error' : undefined}
-                      onChange={(event) => {
-                        setProviderUrl(event.target.value);
-                        setProviderError('');
-                      }}
-                    />
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void addProvider();
+                }}
+              >
+                <FieldGroup>
+                  <Field className="gap-2" data-invalid={!!providerError} data-disabled={updating}>
+                    <FieldLabel htmlFor="custom-provider-url">Custom provider URL</FieldLabel>
+                    <div className="flex min-w-0 gap-2">
+                      <Input
+                        id="custom-provider-url"
+                        type="url"
+                        placeholder="https://chat.example.com"
+                        value={providerUrl}
+                        className="min-w-0 flex-1"
+                        disabled={updating}
+                        required
+                        aria-invalid={!!providerError}
+                        aria-describedby={providerError ? 'custom-provider-error' : undefined}
+                        onChange={(event) => {
+                          setProviderUrl(event.target.value);
+                          setProviderError('');
+                        }}
+                      />
+                      <Button
+                        type="submit"
+                        variant="secondary"
+                        size="lg"
+                        aria-label="Add custom provider"
+                        disabled={updating}
+                      >
+                        {updating ? (
+                          <Spinner data-icon="inline-start" />
+                        ) : (
+                          <Plus data-icon="inline-start" />
+                        )}
+                        Add
+                      </Button>
+                    </div>
                     {providerError && (
                       <FieldError id="custom-provider-error">{providerError}</FieldError>
                     )}
-                  </Field>
-                  <Button
-                    type="submit"
-                    aria-label="Add custom provider"
-                    className="h-8 shrink-0 px-4"
-                    disabled={updating}
-                  >
-                    {updating ? (
-                      <Spinner data-icon="inline-start" />
-                    ) : (
-                      <Plus data-icon="inline-start" />
+                    {providerNotice && (
+                      <FieldDescription role="status" className="text-[var(--success)]">
+                        {providerNotice}
+                      </FieldDescription>
                     )}
-                    Add
-                  </Button>
-                </div>
-                {providerNotice && (
-                  <FieldDescription role="status">{providerNotice}</FieldDescription>
-                )}
-              </FieldGroup>
-            </form>
+                  </Field>
+                </FieldGroup>
+              </form>
+            </div>
           </FieldSet>
-        </CardContent>
-      </Card>
-      <Card size="sm">
-        <CardHeader>
-          <CardTitle className="text-base font-semibold">Appearance</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ToggleGroup
-            aria-label="Appearance"
-            variant="outline"
-            value={[settings.theme]}
-            disabled={updating}
-            onValueChange={(values) => {
-              const theme = values[0];
-              if (theme === 'light' || theme === 'dark' || theme === 'system')
-                void update({ theme });
-            }}
-            className="w-full"
-          >
-            <ToggleGroupItem value="light" className="flex-1">
-              Light
-            </ToggleGroupItem>
-            <ToggleGroupItem value="dark" className="flex-1">
-              Dark
-            </ToggleGroupItem>
-            <ToggleGroupItem value="system" className="flex-1">
-              System
-            </ToggleGroupItem>
-          </ToggleGroup>
-        </CardContent>
-      </Card>
-      <Card size="sm">
-        <CardHeader>
-          <CardTitle className="text-base font-semibold">Back up your skills</CardTitle>
-        </CardHeader>
-        <CardContent className="flex gap-2">
-          <Button variant="outline" className="flex-1" onClick={onExport}>
+        </div>
+      </section>
+      <Separator />
+      <section className="settings-section" aria-labelledby="improve-title">
+        <div className="flex flex-col gap-1.5">
+          <h2 id="improve-title" className="text-section font-semibold">
+            Improve by AI
+          </h2>
+          <p className="text-helper text-muted-foreground">
+            Use Gemini to refine prompts in the skill editor.
+          </p>
+        </div>
+        <GeminiKeySettings configured={geminiConfigured} onChanged={onGeminiKeyChanged} />
+      </section>
+      <Separator />
+      <section className="settings-section" aria-labelledby="backup-title">
+        <div className="flex flex-col gap-1.5">
+          <h2 id="backup-title" className="text-section font-semibold">
+            Back up your skills
+          </h2>
+          <p className="text-helper text-muted-foreground">Export or restore your vault as JSON.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={onExport}>
             <Download data-icon="inline-start" />
             Export
           </Button>
           <Button
             variant="outline"
-            className="flex-1"
             disabled={importing}
             onClick={() => fileInputRef.current?.click()}
           >
@@ -299,8 +310,8 @@ export function Settings({
               }
             }}
           />
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     </div>
   );
 }

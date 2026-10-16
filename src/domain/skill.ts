@@ -1,4 +1,5 @@
-import { Skill, CreateSkillInput } from './types';
+import { Skill, CreateSkillInput, SkillUsage } from './types';
+import { getSkillCollection } from './library';
 
 export const CURRENT_SCHEMA_VERSION = 1;
 
@@ -45,11 +46,32 @@ export function generateSkillId(): string {
 /**
  * Validates input for creating or updating a skill.
  */
-export function validateSkill(input: Partial<CreateSkillInput>): {
+export function validateSkill(input: Partial<CreateSkillInput & { usage: SkillUsage }>): {
   valid: boolean;
   errors: string[];
 } {
   const errors: string[] = [];
+
+  if (
+    input.collection !== undefined &&
+    (typeof input.collection !== 'string' || input.collection.trim().length > 64)
+  ) {
+    errors.push('Collection must be a name of up to 64 characters');
+  }
+  if (input.pinned !== undefined && typeof input.pinned !== 'boolean') {
+    errors.push('Pinned must be true or false');
+  }
+  if (
+    input.usage !== undefined &&
+    (!input.usage ||
+      !Number.isSafeInteger(input.usage.count) ||
+      input.usage.count < 0 ||
+      (input.usage.lastUsedAt !== undefined &&
+        (typeof input.usage.lastUsedAt !== 'string' ||
+          !Number.isFinite(Date.parse(input.usage.lastUsedAt)))))
+  ) {
+    errors.push('Usage must have a non-negative count and a valid last-used date');
+  }
 
   if (!input.name || input.name.trim() === '') {
     errors.push('Skill name is required');
@@ -88,6 +110,8 @@ export function createSkillEntity(input: CreateSkillInput): Skill {
       ? input.tags.map((t) => t.trim().toLowerCase()).filter(Boolean)
       : [],
     favorite: Boolean(input.favorite),
+    collection: getSkillCollection({ collection: input.collection, tags: input.tags ?? [] }),
+    pinned: Boolean(input.pinned),
     variables: input.variables || [],
     providers: input.providers || [],
     createdAt: now,

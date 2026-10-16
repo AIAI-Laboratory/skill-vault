@@ -28,6 +28,8 @@ export interface Skill {
   content: string;
   tags: string[];
   favorite: boolean;
+  collection?: string;
+  pinned?: boolean;
   variables: SkillVariable[];
   providers?: ProviderRule[];
   createdAt: string;

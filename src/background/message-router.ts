@@ -46,6 +46,9 @@ async function handleMessage(msg: ExtensionMessage, repository: SkillRepository)
     case 'SKILL_LIST': {
       return await repository.list();
     }
+    case 'SKILL_IMPORT': {
+      return await repository.importJson(msg.payload?.json);
+    }
     case 'SKILL_GET': {
       const id = msg.payload?.id;
       if (!id) throw new Error('Skill ID is required');

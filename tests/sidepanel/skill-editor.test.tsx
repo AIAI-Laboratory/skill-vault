@@ -26,7 +26,6 @@ async function render(configured = true) {
       <TooltipProvider>
         <SkillEditor
           geminiConfigured={configured}
-          onGeminiKeyChanged={vi.fn()}
           initialDraftContent={initialDraftContent}
           onSave={save}
           onCancel={vi.fn()}
@@ -48,7 +47,7 @@ afterEach(async () => {
   container.remove();
 });
 describe('Improve by AI editor flow', () => {
-  it('disables formatting without a key and opens key setup without losing the draft', async () => {
+  it('disables formatting without a key and directs setup to Settings', async () => {
     await render(false);
     expect(button('Improve by AI').disabled).toBe(true);
     expect(
@@ -61,10 +60,10 @@ describe('Improve by AI editor flow', () => {
     ).toHaveLength(1);
     expect(container.textContent).not.toContain('Detect template');
     expect(
-      document.querySelector('[aria-label="Add a Gemini API key to enable Improve by AI"]')
+      document.querySelector('[aria-label="Configure Improve by AI in Settings"]')
     ).not.toBeNull();
-    await act(async () => button('Add API key').click());
-    expect(document.querySelector('#gemini-api-key')).not.toBeNull();
+    expect(button('Add API key')).toBeUndefined();
+    expect(document.querySelector('#gemini-api-key')).toBeNull();
     expect(prompt().value).toBe(initialDraftContent);
     expect(format).not.toHaveBeenCalled();
   });
@@ -128,5 +127,27 @@ describe('Improve by AI editor flow', () => {
     expect(userInputBtn).not.toBeNull();
     await act(async () => userInputBtn.click());
     expect(textarea.value).toBe('Review {{user_input}}code.\nKeep it safe.');
+  });
+
+  it('toggles the star beside the title and saves its favorite state', async () => {
+    await render();
+    const star = document.querySelector<HTMLButtonElement>('[aria-label="Add to favorites"]')!;
+    expect(star.parentElement?.querySelector('h1')?.textContent).toBe('New skill');
+    await act(async () => star.click());
+    expect(star.getAttribute('aria-pressed')).toBe('true');
+    await act(async () => {
+      const name = document.querySelector<HTMLInputElement>('#skill-name')!;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+        name,
+        'Favorite skill'
+      );
+      name.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () =>
+      container
+        .querySelector('form')!
+        .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    );
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ favorite: true }), undefined);
   });
 });

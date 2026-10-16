@@ -21,6 +21,10 @@ export async function sendExtensionMessage<K extends MessageType>(
   };
 
   if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) {
+    if (import.meta.env.DEV && /^https?:$/.test(globalThis.location?.protocol)) {
+      const { sendLocalMessage } = await import('./local-client');
+      return sendLocalMessage<K>(message);
+    }
     throw new Error('chrome.runtime.sendMessage is not available');
   }
 
