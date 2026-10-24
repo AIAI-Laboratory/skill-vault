@@ -22,9 +22,18 @@ Add the original repository as `upstream`:
 git remote add upstream https://github.com/AIAI-Laboratory/skill-vault.git
 ```
 
-Husky installs the existing pre-commit hook during dependency installation. The hook
-runs lint-staged to lint and format staged files. The commit template helps you write
-messages; it does not validate them automatically.
+Husky installs the Git hooks during dependency installation:
+
+- `pre-commit` runs lint-staged to fix and format staged files, rejects all ESLint
+  warnings and errors, then type-checks the whole working tree.
+- `pre-push` runs `npm run verify`: formatting, zero-warning lint, type checking,
+  tests with coverage thresholds, and the production build. A failing check stops
+  the push before a pull request is opened or updated.
+
+Keep hooks enabled and fix failures before retrying. Local hooks can be skipped
+or missing in another checkout, so GitHub's required checks enforce the same
+quality requirements independently. The commit template helps you write messages;
+it does not validate them automatically.
 
 ## 2. Define the change
 
@@ -91,16 +100,17 @@ Follow the existing architecture and conventions described in the
 [README](README.md). Add or update tests when behavior
 changes, and document user-visible features or changes to setup.
 
-Run the checks relevant to your work while developing. Before requesting review for
-code, build, dependency, or workflow changes, run the same checks as CI:
+Run the checks relevant to your work while developing. Before opening or updating
+an implementation pull request, run the complete local equivalent of CI:
 
 ```bash
-npm run format:check
-npm run lint
-npm run typecheck
-npm run test:coverage
-npm run build
+npm run verify
 ```
+
+This command stops on the first failure and runs formatting, zero-warning lint,
+type checking, tests with coverage thresholds, and the production build. Resolve
+all failures before pushing. After changing code in response to review, rerun it
+on the final changes; an earlier successful run does not validate a later commit.
 
 CI requires formatting, ESLint with zero warnings, type checking, tests on Node.js
 20 and 22, coverage thresholds on Node.js 22, and a successful build. The
@@ -125,8 +135,8 @@ npx prettier --check CONTRIBUTING.md
 git diff --check
 ```
 
-Include every Markdown file you changed in the formatting command. CI still runs
-its complete check suite for pull requests.
+Include every Markdown file you changed in the formatting command. Hooks and CI
+still run their complete check suite, including for documentation pull requests.
 
 For extension behavior or UI changes, also load `dist/` as an unpacked extension
 at `chrome://extensions`. Reload the extension and affected chat tabs after each
@@ -140,7 +150,21 @@ files out of commits.
 ## 5. Commit and push
 
 Follow the [commit message guidelines](docs/commit-message-guidelines.md).
-Stage only files belonging to the contribution, then inspect the staged diff:
+Before committing:
+
+1. Add or update regression tests for behavior changes and verify the affected flow.
+2. Stage only files belonging to this contribution.
+3. Read `git diff --cached` and check for accidental edits, debug code, credentials,
+   generated outputs, unsafe type assertions, or lint suppressions added merely
+   to silence a failure. Fix the cause instead of weakening a check.
+4. Commit. The pre-commit hook must finish successfully. It checks staged JavaScript
+   and TypeScript with `eslint --fix --max-warnings=0`, formats staged files, and
+   then runs the project typecheck. Lint warnings block the commit even when ESLint
+   can otherwise exit successfully. Inspect the hook's staged fixes after committing.
+5. Push. The pre-push hook must complete `npm run verify` successfully. If it fails,
+   fix the problem, commit the fix, and push again.
+
+For example:
 
 ```bash
 git add src/adapters/gemini.ts tests/adapters/gemini.test.ts
@@ -151,12 +175,29 @@ git push -u origin fix/gemini-line-breaks
 
 The example assumes you are working on `fix/gemini-line-breaks`; substitute your
 actual files and branch. Keep commits focused and explain why the change is needed
-in the message body. Inspect and include any edits made by the pre-commit hook.
+in the message body. Hooks can modify staged files; inspect `git show --stat` and
+`git show` after the commit to confirm the final contents. Check `git status` before
+pushing so local verification covers the changes you intend to send.
 
 ## 6. Open a pull request
 
+Before creating a pull request, self-review the complete change against the base:
+
+```bash
+git fetch origin main
+git diff --check origin/main...HEAD
+git diff origin/main...HEAD
+```
+
+For forks, substitute `upstream/main`. Confirm the implementation meets the stated
+behavior, has meaningful tests, and introduces no unrelated changes. Record the
+successful `npm run verify` result in the PR description. Automated checks catch
+formatting, lint, type, tested behavior, coverage, and build failures; they cannot
+replace human review of logic, security, architecture, or usability.
+
 Open the pull request against `AIAI-Laboratory/skill-vault:main`. Use a draft while
-the work is incomplete. The repository's pull request template prompts you to include:
+the work is incomplete and list any outstanding work. The repository's pull
+request template prompts you to include:
 
 - The problem and resulting behavior.
 - A related issue, using `Fixes #123` only if merging resolves it.

@@ -15,5 +15,8 @@
 - [ ] Follow the branch and contribution workflow in CONTRIBUTING.md.
 - [ ] Use the commit header format for the PR title and follow the commit message guide.
 - [ ] Add or update tests and documentation where needed.
-- [ ] Run the applicable checks and record the results above.
+- [ ] Keep Git hooks enabled and resolve pre-commit and pre-push failures.
+- [ ] Run `npm run verify` on the final implementation changes and record the results above (document applicable checks for documentation-only changes).
+- [ ] Self-review the full diff against the base branch before requesting review.
+- [ ] Fix the cause of warnings and failures without weakening lint rules or coverage thresholds.
 - [ ] Keep unrelated changes, generated build outputs, and credentials out of the diff.
