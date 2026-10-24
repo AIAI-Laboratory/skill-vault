@@ -23,26 +23,30 @@ package. Local environment settings are not automatically available to Actions.
 
 ## Release a new version
 
-On a contribution branch, update the version once:
+Choose the version in **GitHub → Releases → Draft a new release → Choose a tag**.
+For example, enter `v0.1.5`, choose the intended code commit (normally `main`), then
+save the draft or publish when ready. The **tag** controls the extension version;
+the release title is display text and can be anything.
+
+You do not need to edit or commit version files first. During packaging, CD takes
+`0.1.5` from `v0.1.5` and stamps `package.json`, `package-lock.json` and
+`public/manifest.json` in its disposable checkout. The source commit and `main`
+are not changed. Existing validation still requires the prepared metadata, built
+manifest, release tag and ZIP version to agree.
+
+Saving a draft alone does not submit to the Store. Publishing a stable release
+builds its selected tag and attaches the ZIPs. Alternatively, pushing a numeric
+tag runs packaging and creates a draft automatically:
 
 ```bash
-npm version 0.1.4 --no-git-tag-version
+git tag v0.1.5
+git push origin v0.1.5
 ```
 
-The npm version lifecycle updates `public/manifest.json` alongside `package.json`
-and `package-lock.json`. Commit those files, open a PR and merge after verification.
-From the merged commit, create and push the matching tag:
-
-```bash
-git tag v0.1.4
-git push origin v0.1.4
-```
-
-The `Release Extension` workflow verifies, builds and packages that commit, then
-prepares a **draft** GitHub Release. Build and packaging fail if the tag,
-`package.json`, source manifest or packaged manifest disagree. Manual builds use
-the package version and ignore branch names. A manual release-workflow run with a
-tag input checks out that tag, rather than building the current branch.
+A manual `Release Extension` run with a tag input checks out that tag and uses it
+as the build version. A manual run without a tag falls back to `package.json`.
+Ordinary local builds use the checked-in development version; they do not change
+the repository's files automatically.
 
 Review the draft and click **Publish release** on GitHub. The `Chrome Web Store`
 workflow downloads the versioned ZIP from the latest public stable GitHub Release,
@@ -71,9 +75,9 @@ accidentally published as a stable release. Beta tags are also skipped by the
 packaging workflow. For GitHub-only beta announcements, select **Set as a
 pre-release**. This pipeline does not build beta ZIPs or submit them to the Store.
 
-Before publishing a new stable tag such as `v0.1.5`, its tagged commit must already
-contain version `0.1.5` in all three version files. Creating a GitHub draft or
-choosing a new tag does not update source versions. Mismatches still fail clearly.
+Use numeric tags such as `v0.1.5` or `v0.1.6`; each Store update must have a higher
+numeric version. The development version in the tagged source may be older: CD
+sets the released extension version from the tag automatically.
 
 ## While another version is pending
 
@@ -117,9 +121,12 @@ listing or configuration issues, rerun **sync**; hourly runs also retry.
 
 - **403 / PERMISSION_DENIED:** check the linked service account, API enablement and
   both repository variables.
-- **Version mismatch:** use `npm version <version> --no-git-tag-version`, commit all
-  three version files and use a matching tag. Renaming a ZIP does not change its
-  extension version.
+- **Version mismatch in an old workflow:** rerun `Release Extension` from `main`
+  with the existing release tag as `tag_name`. The updated workflow stamps the
+  build metadata even when that tag points to older development version files.
+  Rerunning an old failed run reuses its old workflow definition.
+- **Invalid version:** use a numeric tag accepted by Chrome. The tag, rather than
+  the release title or ZIP filename, determines the packaged extension version.
 - **Beta shown as Latest:** beta tags are ignored by Store delivery even if the
   GitHub prerelease flag was omitted.
 - **Release published before its ZIPs:** the packaging workflow fills missing ZIPs

@@ -211,3 +211,87 @@ describe('release preparation shell from the actual workflow', () => {
     }
   );
 });
+
+describe('GitHub release tag sets the build version', () => {
+  const stamp = (tag, manifestVersion = '0.1.4') => {
+    const dir = sandbox();
+    fs.mkdirSync(path.join(dir, 'public'));
+    fs.mkdirSync(path.join(dir, 'scripts'));
+    fs.copyFileSync(
+      new URL('release-version.mjs', import.meta.url),
+      path.join(dir, 'scripts/release-version.mjs')
+    );
+    fs.writeFileSync(
+      path.join(dir, 'package.json'),
+      '{"name":"skill-vault","version":"0.1.4","type":"module"}'
+    );
+    fs.writeFileSync(
+      path.join(dir, 'public/manifest.json'),
+      JSON.stringify({ version: manifestVersion, manifest_version: 3, permissions: ['storage'] })
+    );
+    fs.writeFileSync(
+      path.join(dir, 'package-lock.json'),
+      JSON.stringify({
+        version: '0.1.4',
+        lockfileVersion: 3,
+        packages: {
+          '': { name: 'skill-vault', version: '0.1.4' },
+          'node_modules/example': { version: '9.8.7' },
+        },
+      })
+    );
+    const before = ['package.json', 'public/manifest.json', 'package-lock.json'].map((file) =>
+      fs.readFileSync(path.join(dir, file), 'utf8')
+    );
+    const result = spawnSync(
+      'bash',
+      ['-e', '-c', workflowStep('Set build version from release tag')],
+      {
+        cwd: dir,
+        encoding: 'utf8',
+        env: { ...process.env, RELEASE_CANDIDATE: tag, GITHUB_ENV: path.join(dir, 'env') },
+      }
+    );
+    const read = (file) => JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
+    return { dir, before, result, read };
+  };
+  it('builds 0.1.5 from a release tag while the tagged source still says 0.1.4', () => {
+    const { dir, result, read } = stamp('v0.1.5');
+    expect(result.status, result.stderr).toBe(0);
+    expect(read('package.json').version).toBe('0.1.5');
+    expect(read('public/manifest.json')).toEqual({
+      version: '0.1.5',
+      manifest_version: 3,
+      permissions: ['storage'],
+    });
+    expect(read('package-lock.json').version).toBe('0.1.5');
+    expect(read('package-lock.json').packages[''].version).toBe('0.1.5');
+    expect(read('package-lock.json').packages['node_modules/example'].version).toBe('9.8.7');
+    expect(fs.readFileSync(path.join(dir, 'env'), 'utf8')).toBe(
+      'RELEASE_TAG=v0.1.5\nRELEASE_VERSION=v0.1.5\n'
+    );
+  });
+  it('aligns stale source manifest metadata to the release tag', () => {
+    const { result, read } = stamp('v0.1.6', '0.1.1');
+    expect(result.status, result.stderr).toBe(0);
+    expect(read('package.json').version).toBe('0.1.6');
+    expect(read('public/manifest.json').version).toBe('0.1.6');
+  });
+  it('keeps package version as the fallback for a manual run with no tag', () => {
+    const { result, read } = stamp('');
+    expect(result.status, result.stderr).toBe(0);
+    expect(read('public/manifest.json').version).toBe('0.1.4');
+  });
+  it.each(['v0.0.0', 'v1.65536.0', 'v0.1.5-beta'])(
+    'rejects invalid Chrome version %s before writing files',
+    (tag) => {
+      const { dir, before, result } = stamp(tag);
+      expect(result.status).not.toBe(0);
+      expect(
+        ['package.json', 'public/manifest.json', 'package-lock.json'].map((file) =>
+          fs.readFileSync(path.join(dir, file), 'utf8')
+        )
+      ).toEqual(before);
+    }
+  );
+});
