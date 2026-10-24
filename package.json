@@ -15,6 +15,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "setup:commits": "git config --local commit.template .gitmessage",
     "prepare": "husky"
   },
   "lint-staged": {

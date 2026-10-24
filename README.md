@@ -140,3 +140,17 @@ npm run build
 # Package extension into zip archive
 npm run package
 ```
+
+## Contributing
+
+Read the [contribution workflow](CONTRIBUTING.md) before starting work. Create a separate branch such as `feat/skill-folders` or `fix/gemini-line-breaks`, run the applicable checks, and open a pull request against `main`.
+
+Follow the [commit message guidelines](docs/commit-message-guidelines.md) when creating commits or squash messages. The guide adapts Angular's format to Skill Vault's project areas.
+
+Enable the shared commit template once per clone:
+
+```bash
+npm run setup:commits
+```
+
+Then use `git commit` to write a message with the template in your editor.
