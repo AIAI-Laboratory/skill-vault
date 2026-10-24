@@ -22,12 +22,26 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag_name || github.ref }}
 
       - name: Setup Node.js 22.x
         uses: actions/setup-node@v7
         with:
           node-version: 22.x
           cache: 'npm'
+
+      - name: Validate release version
+        env:
+          RELEASE_CANDIDATE: ${{ inputs.tag_name || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { pathToFileURL } from 'node:url';
+          import { readReleaseVersion } from './scripts/release-version.mjs';
+          const tag = readReleaseVersion(pathToFileURL(`${process.cwd()}/`), process.env.RELEASE_CANDIDATE);
+          fs.appendFileSync(process.env.GITHUB_ENV, `RELEASE_TAG=${tag}\nRELEASE_VERSION=${tag}\n`);
+          NODE
 
       - name: Install dependencies
         run: npm ci
@@ -45,19 +59,7 @@ jobs:
         run: npm test
 
       - name: Build & package extension
-        env:
-          INPUT_TAG_NAME: ${{ inputs.tag_name }}
-        run: |
-          if [ -n "${INPUT_TAG_NAME}" ]; then
-            TAG_NAME="${INPUT_TAG_NAME}"
-          elif [ -n "${GITHUB_REF_NAME}" ] && [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            TAG_NAME="${GITHUB_REF_NAME}"
-          else
-            PKG_VERSION=$(node -p "require('./package.json').version")
-            TAG_NAME="v${PKG_VERSION}"
-          fi
-          echo "RELEASE_TAG=${TAG_NAME}" >> $GITHUB_ENV
-          RELEASE_VERSION="${TAG_NAME}" npm run package
+        run: npm run package
 
       - name: Prepare GitHub Draft Release
         env:
@@ -65,11 +67,16 @@ jobs:
         run: |
           echo "Preparing draft release ${RELEASE_TAG}..."
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-            echo "Release ${RELEASE_TAG} already exists, uploading assets..."
+            if [ "$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft')" != true ]; then
+              echo 'Refusing to overwrite assets of a published release.' >&2
+              exit 1
+            fi
+            echo "Draft ${RELEASE_TAG} already exists, uploading assets..."
             gh release upload "${RELEASE_TAG}" skill-vault-*.zip skill-vault.zip --clobber
           else
             echo "Creating draft release ${RELEASE_TAG}..."
             gh release create "${RELEASE_TAG}" skill-vault-*.zip skill-vault.zip \
+              --target "$GITHUB_SHA" \
               --title "Skill Vault ${RELEASE_TAG}" \
               --draft \
               --generate-notes

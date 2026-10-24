@@ -1,11 +1,15 @@
 # Chrome Web Store CI/CD
 
-The `Chrome Web Store` GitHub Actions workflow uses the Chrome Web Store API v2 to update the existing Skill Vault listing. The separate `Release Extension` workflow builds ZIP files and prepares a **draft** GitHub Release. Publishing that release triggers delivery to Chrome Web Store.
+GitHub and Chrome Web Store use the same version and the same ZIP. Publishing a
+stable GitHub Release triggers store delivery. Google reviews that package and
+publishes it after approval, so the publicly visible Store version can lag behind
+GitHub while review is pending.
 
 ## One-time configuration
 
 1. Enable the Chrome Web Store API in the service account's Google Cloud project.
-2. Add the service account email under **Publisher → Settings → Service account** in the Chrome Web Store Developer Dashboard. This grants access to all items owned by that publisher.
+2. Add the service account email in the Chrome Web Store Developer Dashboard under
+   **Publisher → Settings → Service account**.
 3. Configure these values in **GitHub repository → Settings → Secrets and variables → Actions**:
 
 | Type     | Name                       | Value                                            |
@@ -14,46 +18,94 @@ The `Chrome Web Store` GitHub Actions workflow uses the Chrome Web Store API v2 
 | Variable | `CWS_PUBLISHER_ID`         | Publisher ID shown in the Developer Dashboard    |
 | Variable | `CWS_EXTENSION_ID`         | Existing extension item ID                       |
 
-Local `.env` values are not automatically available to GitHub Actions. They must also be configured in GitHub. Keep `.env` and JSON key files private; never commit them. The workflow does not bundle credentials into the extension.
-
-## Check access without uploading
-
-Open **Actions → Chrome Web Store → Run workflow** and run against `main`. Manual runs are read-only. This authenticates, reads the listing status, and writes a job summary. It does not upload, submit, cancel a review, or publish anything.
-
-Using the GitHub CLI:
-
-```bash
-gh workflow run chrome-web-store.yml --ref main
-```
+Keep credentials private. Never commit JSON key files or put them in an extension
+package. Local environment settings are not automatically available to Actions.
 
 ## Release a new version
 
-Increase `version` in `public/manifest.json` and `package.json`, commit the release changes, and push them. The tag must exactly match the manifest version:
+On a contribution branch, update the version once:
 
 ```bash
-git tag v0.1.2
-git push origin v0.1.2
+npm version 0.1.4 --no-git-tag-version
 ```
 
-Pushing a `v*` tag runs the `Release Extension` workflow, which validates and packages the extension and creates a **draft** GitHub Release with the ZIP assets. Tag pushes and draft releases do not upload anything to Chrome Web Store.
+The npm version lifecycle updates `public/manifest.json` alongside `package.json`
+and `package-lock.json`. Commit those files, open a PR and merge after verification.
+From the merged commit, create and push the matching tag:
 
-When ready, open **GitHub → Releases**, edit the draft, review its tag and assets, and click **Publish release**. The `release: published` event starts the `Chrome Web Store` workflow, which checks out that release's tag, validates and builds it, uploads `skill-vault.zip`, waits for upload processing to succeed, and submits it for review. Google publishes the update after approval using the listing's existing distribution settings.
+```bash
+git tag v0.1.4
+git push origin v0.1.4
+```
 
-A published GitHub Release created manually or with your own GitHub CLI credentials also triggers store delivery. Published prereleases are included. Editing release notes, updating assets, or saving a draft does not trigger store delivery.
+The `Release Extension` workflow verifies, builds and packages that commit, then
+prepares a **draft** GitHub Release. Build and packaging fail if the tag,
+`package.json`, source manifest or packaged manifest disagree. Manual builds use
+the package version and ignore branch names. A manual release-workflow run with a
+tag input checks out that tag, rather than building the current branch.
 
-Release publication performed with a workflow's `GITHUB_TOKEN` does not trigger a separate release-event workflow. The draft-first flow avoids that limitation: the build workflow prepares the draft, and a user publishes it from GitHub or the CLI.
+Review the draft and click **Publish release** on GitHub. The `Chrome Web Store`
+workflow downloads the versioned ZIP from the latest public stable GitHub Release,
+checks its manifest against the release tag, uploads those exact bytes and submits
+with automatic publication after approval. It does not rebuild the extension.
+The release workflow refuses to overwrite assets of an already published release.
+Do not edit published assets manually; make a new version for changes.
 
-The workflow rejects a tag that does not match the manifest version and a version that is not newer than an existing published or submitted revision. Chrome Web Store also validates versions and submission eligibility. The workflow never cancels an existing review. Wait for an active review to finish before attempting another submission.
+Publishing a release with a workflow's `GITHUB_TOKEN` does not trigger a separate
+release-event workflow. The draft-first flow avoids this: a maintainer publishes
+the draft from GitHub or with their own CLI credentials. The hourly sync also
+picks up public stable releases if a release event is missed. Drafts and
+prereleases are excluded from Store delivery.
 
-## Manual checks
+## While another version is pending
 
-Manual runs only read the store status. Uploads and submissions require a published GitHub Release; there is no manual upload or publish bypass. A successful store submission means Google accepted it for processing; it does not mean review has completed.
+An active review is preserved. A sync reports that it is deferred, then the hourly
+workflow checks again. When review completes, the next run submits the latest
+public stable GitHub Release. If you publish several releases during a review,
+intermediate releases are superseded: the Store catches up to the latest release.
+GitHub scheduling may be delayed; hourly is the requested cadence, not a deadline.
+
+The same version already pending or published is a successful no-op. A rejected or
+cancelled submission of the same version needs dashboard attention or a higher
+release version. A staged submission must be published in the dashboard before
+sync continues. The workflow does not cancel reviews or downgrade a newer Store
+version. Listing metadata, privacy disclosures and distribution settings remain
+managed in the Developer Dashboard.
+
+A successful submission means Google accepted it for processing; it does not mean
+review has completed or that all installed browsers have updated.
+
+## Manual checks and retry
+
+Open **Actions → Chrome Web Store → Run workflow**:
+
+- **status** (default) authenticates and reads the listing status without uploading.
+- **sync** retries the latest public stable GitHub Release with the same checks as
+  automatic runs. It cannot upload an unpublished draft or choose another ZIP.
+
+```bash
+gh workflow run chrome-web-store.yml --ref main -f operation=status
+gh workflow run chrome-web-store.yml --ref main -f operation=sync
+```
+
+Read the job summary for published, pending, deferred or submitted status. A failed
+upload, API error or rejected submission fails the job for inspection. After fixing
+listing or configuration issues, rerun **sync**; hourly runs also retry.
 
 ## Troubleshooting
 
-- **403 / PERMISSION_DENIED:** confirm the JSON key belongs to the service account linked to the correct publisher and that both repository variables identify the intended listing.
-- **Version rejected:** increase `public/manifest.json` version and publish a release with a matching tag. Renaming the ZIP does not change the extension version.
-- **Listing or privacy errors:** complete the required fields in the Developer Dashboard, including the public privacy-policy URL, and save the draft.
-- **Upload timeout:** inspect the package status in the dashboard before retrying; the upload may still be processing.
+- **403 / PERMISSION_DENIED:** check the linked service account, API enablement and
+  both repository variables.
+- **Version mismatch:** use `npm version <version> --no-git-tag-version`, commit all
+  three version files and use a matching tag. Renaming a ZIP does not change its
+  extension version.
+- **Older public release with a mismatching ZIP:** publish a corrected higher
+  version; the sync deliberately refuses the mismatching release.
+- **Listing or privacy errors:** complete the required dashboard fields, including
+  the public privacy-policy URL.
+- **Upload timeout:** inspect the dashboard package before retrying. If the upload
+  is still processing, the next sync defers instead of interrupting it.
 
-See Google's documentation for [API usage](https://developer.chrome.com/docs/webstore/using-api) and [service accounts](https://developer.chrome.com/docs/webstore/service-accounts).
+See Google's documentation for [API usage](https://developer.chrome.com/docs/webstore/using-api),
+[service accounts](https://developer.chrome.com/docs/webstore/service-accounts) and
+[submission states](https://developer.chrome.com/docs/webstore/api/reference/rest/v2/ItemState).
