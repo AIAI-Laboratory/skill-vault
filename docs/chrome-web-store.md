@@ -1,8 +1,8 @@
 # Chrome Web Store CI/CD
 
 GitHub and Chrome Web Store use the same version and the same ZIP. Publishing a
-stable GitHub Release triggers store delivery. Google reviews that package and
-publishes it after approval, so the publicly visible Store version can lag behind
+stable GitHub Release triggers packaging and store delivery. Google reviews that
+package and publishes it after approval, so the publicly visible Store version can lag behind
 GitHub while review is pending.
 
 ## One-time configuration
@@ -48,14 +48,32 @@ Review the draft and click **Publish release** on GitHub. The `Chrome Web Store`
 workflow downloads the versioned ZIP from the latest public stable GitHub Release,
 checks its manifest against the release tag, uploads those exact bytes and submits
 with automatic publication after approval. It does not rebuild the extension.
-The release workflow refuses to overwrite assets of an already published release.
+You can also create a draft in GitHub's release editor. Saving a draft does not
+trigger Store delivery. When you publish it, `Release Extension` builds the tag
+and adds the ZIPs if they are missing. If the Store workflow runs before the ZIP
+is ready, it reports that it is waiting; successful packaging triggers another
+sync. A release with both ZIPs already published is a no-op, so tag
+pushes, publication events and reruns preserve its assets. A partly uploaded ZIP
+pair requires inspection. Published ZIPs are never overwritten by the workflow.
 Do not edit published assets manually; make a new version for changes.
 
 Publishing a release with a workflow's `GITHUB_TOKEN` does not trigger a separate
 release-event workflow. The draft-first flow avoids this: a maintainer publishes
-the draft from GitHub or with their own CLI credentials. The hourly sync also
-picks up public stable releases if a release event is missed. Drafts and
-prereleases are excluded from Store delivery.
+the draft from GitHub or with their own CLI credentials. The sync after a
+successful `Release Extension` run and the hourly retry also pick up public stable releases if a publication event is missed. Delivery runs
+trusted code from `main`; it does not run code or consume build artifacts from the
+completed run. Failed builds and foreign-repository runs do not trigger delivery.
+
+Store selection scans paginated releases and chooses the highest numeric Chrome
+version, regardless of GitHub's manually selected Latest flag. Drafts, prereleases
+and non-numeric tags such as `v0.1.4-beta` are excluded, even if a beta was
+accidentally published as a stable release. Beta tags are also skipped by the
+packaging workflow. For GitHub-only beta announcements, select **Set as a
+pre-release**. This pipeline does not build beta ZIPs or submit them to the Store.
+
+Before publishing a new stable tag such as `v0.1.5`, its tagged commit must already
+contain version `0.1.5` in all three version files. Creating a GitHub draft or
+choosing a new tag does not update source versions. Mismatches still fail clearly.
 
 ## While another version is pending
 
@@ -64,6 +82,9 @@ workflow checks again. When review completes, the next run submits the latest
 public stable GitHub Release. If you publish several releases during a review,
 intermediate releases are superseded: the Store catches up to the latest release.
 GitHub scheduling may be delayed; hourly is the requested cadence, not a deadline.
+
+If the highest stable release has no complete versioned ZIP, sync waits for it
+instead of sending an older package.
 
 The same version already pending or published is a successful no-op. A rejected or
 cancelled submission of the same version needs dashboard attention or a higher
@@ -99,6 +120,10 @@ listing or configuration issues, rerun **sync**; hourly runs also retry.
 - **Version mismatch:** use `npm version <version> --no-git-tag-version`, commit all
   three version files and use a matching tag. Renaming a ZIP does not change its
   extension version.
+- **Beta shown as Latest:** beta tags are ignored by Store delivery even if the
+  GitHub prerelease flag was omitted.
+- **Release published before its ZIPs:** the packaging workflow fills missing ZIPs
+  and triggers sync on completion; no manual upload is normally needed.
 - **Older public release with a mismatching ZIP:** publish a corrected higher
   version; the sync deliberately refuses the mismatching release.
 - **Listing or privacy errors:** complete the required dashboard fields, including

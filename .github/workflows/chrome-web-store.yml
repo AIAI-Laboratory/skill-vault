@@ -3,6 +3,9 @@ name: Chrome Web Store
 on:
   release:
     types: [published]
+  workflow_run:
+    workflows: [Release Extension]
+    types: [completed]
   schedule:
     - cron: '17 * * * *'
   workflow_dispatch:
@@ -22,7 +25,12 @@ concurrency:
 
 jobs:
   webstore:
-    if: github.event_name != 'release' || !github.event.release.prerelease
+    if: >-
+      (github.event_name != 'release' || !github.event.release.prerelease) &&
+      (github.event_name != 'workflow_run' ||
+        (github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.head_repository.full_name == github.repository &&
+         github.event.workflow_run.event != 'pull_request'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -43,25 +51,7 @@ jobs:
         id: release
         env:
           GH_REPO: ${{ github.repository }}
-        run: |
-          # GitHub excludes drafts and prereleases from /releases/latest.
-          if ! gh api "repos/$GH_REPO/releases/latest" > release.json 2> release-error.txt; then
-            if grep -q 'HTTP 404' release-error.txt; then
-              echo 'No public stable release to sync.' >> "$GITHUB_STEP_SUMMARY"
-              exit 0
-            fi
-            cat release-error.txt >&2
-            exit 1
-          fi
-          tag=$(jq -r '.tag_name' release.json)
-          RELEASE_VERSION="$tag" node --input-type=module <<'NODE'
-          import { versionParts } from './scripts/release-version.mjs';
-          const tag = process.env.RELEASE_VERSION;
-          if (!tag.startsWith('v')) throw new Error('Expected a v-prefixed release tag.');
-          versionParts(tag.slice(1));
-          NODE
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "RELEASE_VERSION=$tag" >> "$GITHUB_ENV"
+        run: node scripts/store-release.mjs
 
       - name: Download and validate published ZIP
         if: steps.release.outputs.tag != ''

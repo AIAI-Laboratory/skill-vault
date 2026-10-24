@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag_name:
@@ -14,26 +16,47 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ inputs.tag_name || github.event.release.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   release:
-    name: Build & Prepare Draft Release
+    name: Build & Prepare Release
+    if: github.event_name != 'release' || !github.event.release.prerelease
     runs-on: ubuntu-latest
 
     steps:
+      - name: Select release tag
+        id: candidate
+        env:
+          RELEASE_CANDIDATE: ${{ inputs.tag_name || github.event.release.tag_name || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
+        run: |
+          if [[ -n "$RELEASE_CANDIDATE" && ! "$RELEASE_CANDIDATE" =~ ^v(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*)){0,3}$ ]]; then
+            echo "Skipping unsupported extension tag: $RELEASE_CANDIDATE"
+            echo 'eligible=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo 'eligible=true' >> "$GITHUB_OUTPUT"
+          echo "tag=$RELEASE_CANDIDATE" >> "$GITHUB_OUTPUT"
+
       - name: Checkout repository
+        if: steps.candidate.outputs.eligible == 'true'
         uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag_name || github.ref }}
+          ref: ${{ steps.candidate.outputs.tag || github.ref }}
 
       - name: Setup Node.js 22.x
+        if: steps.candidate.outputs.eligible == 'true'
         uses: actions/setup-node@v7
         with:
           node-version: 22.x
           cache: 'npm'
 
       - name: Validate release version
+        if: steps.candidate.outputs.eligible == 'true'
         env:
-          RELEASE_CANDIDATE: ${{ inputs.tag_name || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
+          RELEASE_CANDIDATE: ${{ steps.candidate.outputs.tag }}
         run: |
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
@@ -44,38 +67,48 @@ jobs:
           NODE
 
       - name: Install dependencies
+        if: steps.candidate.outputs.eligible == 'true'
         run: npm ci
 
       - name: Check code formatting
+        if: steps.candidate.outputs.eligible == 'true'
         run: npm run format:check
 
       - name: Lint
+        if: steps.candidate.outputs.eligible == 'true'
         run: npm run lint
 
       - name: Typecheck
+        if: steps.candidate.outputs.eligible == 'true'
         run: npm run typecheck
 
       - name: Run unit tests
+        if: steps.candidate.outputs.eligible == 'true'
         run: npm test
 
       - name: Build & package extension
+        if: steps.candidate.outputs.eligible == 'true'
         run: npm run package
 
-      - name: Prepare GitHub Draft Release
+      - name: Prepare GitHub Release
+        if: steps.candidate.outputs.eligible == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Preparing draft release ${RELEASE_TAG}..."
-          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-            if [ "$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft')" != true ]; then
-              echo 'Refusing to overwrite assets of a published release.' >&2
-              exit 1
+          files=("skill-vault-${RELEASE_TAG}.zip" "skill-vault.zip")
+          if release=$(gh release view "$RELEASE_TAG" --json isDraft,assets); then
+            if [ "$(jq -r '.isDraft' <<< "$release")" = true ]; then
+              gh release upload "$RELEASE_TAG" "${files[@]}" --clobber
+            else
+              count=$(jq --arg versioned "${files[0]}" '[.assets[] | select(.name == $versioned or .name == "skill-vault.zip")] | length' <<< "$release")
+              case "$count" in
+                0) gh release upload "$RELEASE_TAG" "${files[@]}" ;;
+                2) echo 'Published ZIP assets already exist; keeping them unchanged.' ;;
+                *) echo 'Published release has only one ZIP asset. Inspect it before repairing the missing copy.' >&2; exit 1 ;;
+              esac
             fi
-            echo "Draft ${RELEASE_TAG} already exists, uploading assets..."
-            gh release upload "${RELEASE_TAG}" skill-vault-*.zip skill-vault.zip --clobber
           else
-            echo "Creating draft release ${RELEASE_TAG}..."
-            gh release create "${RELEASE_TAG}" skill-vault-*.zip skill-vault.zip \
+            gh release create "$RELEASE_TAG" "${files[@]}" \
               --target "$GITHUB_SHA" \
               --title "Skill Vault ${RELEASE_TAG}" \
               --draft \
