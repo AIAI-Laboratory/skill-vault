@@ -83,8 +83,6 @@ Use `<type>/<short-description>`:
 | CI                    | `ci/check-extension-package`         |
 | Revert                | `revert/custom-provider-permissions` |
 
-Codex-created branches use `codex/<type>-<short-description>`, for example
-`codex/feat-skill-folders` or `codex/docs-contribution-workflow`.
 Automated dependency branches may keep their generated names.
 
 ## 4. Develop and verify

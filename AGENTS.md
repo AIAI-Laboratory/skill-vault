@@ -2,7 +2,7 @@
 
 Follow [the contribution workflow](CONTRIBUTING.md) for development and pull requests.
 For new tasks, start from the latest `main` on a separate branch named
-`codex/<type>-<short-description>`, such as `codex/fix-gemini-line-breaks`.
+`<type>/<short-description>`, such as `fix/gemini-line-breaks`.
 Preserve unrelated changes in existing checkouts; use a separate worktree when
 needed. Run the checks appropriate to the change and report their results.
 
