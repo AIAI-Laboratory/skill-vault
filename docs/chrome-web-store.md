@@ -1,6 +1,6 @@
 # Chrome Web Store CI/CD
 
-The `Chrome Web Store` GitHub Actions workflow uses the Chrome Web Store API v2 to update the existing Skill Vault listing. The separate `Release Extension` workflow continues to create GitHub release ZIP files.
+The `Chrome Web Store` GitHub Actions workflow uses the Chrome Web Store API v2 to update the existing Skill Vault listing. The separate `Release Extension` workflow builds ZIP files and prepares a **draft** GitHub Release. Publishing that release triggers delivery to Chrome Web Store.
 
 ## One-time configuration
 
@@ -18,12 +18,12 @@ Local `.env` values are not automatically available to GitHub Actions. They must
 
 ## Check access without uploading
 
-Open **Actions → Chrome Web Store → Run workflow**, leave `operation` set to `status`, and run against `main`. This authenticates, reads the listing status, and writes a job summary. It does not upload, submit, cancel a review, or publish anything.
+Open **Actions → Chrome Web Store → Run workflow** and run against `main`. Manual runs are read-only. This authenticates, reads the listing status, and writes a job summary. It does not upload, submit, cancel a review, or publish anything.
 
 Using the GitHub CLI:
 
 ```bash
-gh workflow run chrome-web-store.yml --ref main -f operation=status
+gh workflow run chrome-web-store.yml --ref main
 ```
 
 ## Release a new version
@@ -35,24 +35,24 @@ git tag v0.1.2
 git push origin v0.1.2
 ```
 
-Pushing a `v*` tag runs dependency installation, formatting, linting, typechecking, tests, and packaging. After those checks pass, the workflow uploads `skill-vault.zip`, waits for upload processing to succeed, and submits it for review. Google publishes the update after approval using the listing's existing distribution settings.
+Pushing a `v*` tag runs the `Release Extension` workflow, which validates and packages the extension and creates a **draft** GitHub Release with the ZIP assets. Tag pushes and draft releases do not upload anything to Chrome Web Store.
+
+When ready, open **GitHub → Releases**, edit the draft, review its tag and assets, and click **Publish release**. The `release: published` event starts the `Chrome Web Store` workflow, which checks out that release's tag, validates and builds it, uploads `skill-vault.zip`, waits for upload processing to succeed, and submits it for review. Google publishes the update after approval using the listing's existing distribution settings.
+
+A published GitHub Release created manually or with your own GitHub CLI credentials also triggers store delivery. Published prereleases are included. Editing release notes, updating assets, or saving a draft does not trigger store delivery.
+
+Release publication performed with a workflow's `GITHUB_TOKEN` does not trigger a separate release-event workflow. The draft-first flow avoids that limitation: the build workflow prepares the draft, and a user publishes it from GitHub or the CLI.
 
 The workflow rejects a tag that does not match the manifest version and a version that is not newer than an existing published or submitted revision. Chrome Web Store also validates versions and submission eligibility. The workflow never cancels an existing review. Wait for an active review to finish before attempting another submission.
 
-## Manual uploads and submissions
+## Manual checks
 
-When running the workflow manually, choose:
-
-- `status`: read the listing status only; this is the default.
-- `upload`: validate, build, and upload a new draft package without submitting it.
-- `publish`: validate, build, upload, and submit the package for review.
-
-For `upload` and `publish`, run from a trusted branch or tag containing the intended extension version. A successful submission means Google accepted it for processing; it does not mean review has completed.
+Manual runs only read the store status. Uploads and submissions require a published GitHub Release; there is no manual upload or publish bypass. A successful store submission means Google accepted it for processing; it does not mean review has completed.
 
 ## Troubleshooting
 
 - **403 / PERMISSION_DENIED:** confirm the JSON key belongs to the service account linked to the correct publisher and that both repository variables identify the intended listing.
-- **Version rejected:** increase `public/manifest.json` version and use a matching release tag. Renaming the ZIP does not change the extension version.
+- **Version rejected:** increase `public/manifest.json` version and publish a release with a matching tag. Renaming the ZIP does not change the extension version.
 - **Listing or privacy errors:** complete the required fields in the Developer Dashboard, including the public privacy-policy URL, and save the draft.
 - **Upload timeout:** inspect the package status in the dashboard before retrying; the upload may still be processing.
 

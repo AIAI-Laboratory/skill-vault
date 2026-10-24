@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   release:
-    name: Build & Publish Release
+    name: Build & Prepare Draft Release
     runs-on: ubuntu-latest
 
     steps:
@@ -45,9 +45,11 @@ jobs:
         run: npm test
 
       - name: Build & package extension
+        env:
+          INPUT_TAG_NAME: ${{ inputs.tag_name }}
         run: |
-          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
-            TAG_NAME="${{ github.event.inputs.tag_name }}"
+          if [ -n "${INPUT_TAG_NAME}" ]; then
+            TAG_NAME="${INPUT_TAG_NAME}"
           elif [ -n "${GITHUB_REF_NAME}" ] && [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             TAG_NAME="${GITHUB_REF_NAME}"
           else
@@ -57,17 +59,18 @@ jobs:
           echo "RELEASE_TAG=${TAG_NAME}" >> $GITHUB_ENV
           RELEASE_VERSION="${TAG_NAME}" npm run package
 
-      - name: Publish GitHub Release
+      - name: Prepare GitHub Draft Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Releasing ${RELEASE_TAG}..."
+          echo "Preparing draft release ${RELEASE_TAG}..."
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             echo "Release ${RELEASE_TAG} already exists, uploading assets..."
             gh release upload "${RELEASE_TAG}" skill-vault-*.zip skill-vault.zip --clobber
           else
-            echo "Creating new release ${RELEASE_TAG}..."
+            echo "Creating draft release ${RELEASE_TAG}..."
             gh release create "${RELEASE_TAG}" skill-vault-*.zip skill-vault.zip \
               --title "Skill Vault ${RELEASE_TAG}" \
+              --draft \
               --generate-notes
           fi
