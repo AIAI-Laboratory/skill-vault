@@ -124,11 +124,13 @@ export const App: React.FC = () => {
   };
 
   useEffect(() => {
-    loadSkills();
-    loadTrash();
-    loadSettings();
+    // These loaders only update state after asynchronous extension reads settle.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadSkills();
+    void loadTrash();
+    void loadSettings();
     void loadGeminiStatus();
-    checkDraftSkill();
+    void checkDraftSkill();
 
     // Periodic check or storage listener for draft skill
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
@@ -222,8 +224,8 @@ export const App: React.FC = () => {
       await sendExtensionMessage('SKILL_DELETE', { id });
       showToast('Moved to trash. Automatically deleted after 24 hours.');
       await Promise.all([loadSkills(), loadTrash()]);
-    } catch (err: any) {
-      showToast(err.message || 'Failed to delete');
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to delete');
     }
   };
 
@@ -246,8 +248,8 @@ export const App: React.FC = () => {
     try {
       await sendExtensionMessage('SKILL_UPDATE', { id, patch: { favorite: !current } });
       await loadSkills();
-    } catch (err: any) {
-      showToast(err.message || 'Failed to update favorite');
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to update favorite');
     }
   };
 
@@ -285,7 +287,7 @@ export const App: React.FC = () => {
     try {
       const text = await file.text();
       const parsed = JSON.parse(text);
-      const skillsToImport: any[] = Array.isArray(parsed) ? parsed : parsed.skills;
+      const skillsToImport: CreateSkillInput[] = Array.isArray(parsed) ? parsed : parsed.skills;
 
       if (!Array.isArray(skillsToImport)) {
         throw new Error('Invalid backup file: no skills found.');
@@ -305,8 +307,8 @@ export const App: React.FC = () => {
 
       await loadSkills();
       showToast(`Imported ${count} skills!`);
-    } catch (err: any) {
-      showToast(err.message || 'Import failed');
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Import failed');
     }
   };
 

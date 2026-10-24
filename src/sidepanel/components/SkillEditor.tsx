@@ -180,8 +180,8 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
         },
         initialSkill?.id
       );
-    } catch (err: any) {
-      setError(err?.message || 'Failed to save skill.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to save skill.');
     } finally {
       setSaving(false);
     }

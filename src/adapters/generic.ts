@@ -180,7 +180,7 @@ export class GenericAdapter implements AIAdapter {
 
   observeComposer(callback: ComposerChangeCallback): DisposeFunction {
     let lastEl = this.findComposer()?.element;
-    let timer: any = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
     const check = () => {
       const current = this.findComposer();
