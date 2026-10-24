@@ -3,7 +3,15 @@ name: Chrome Web Store
 on:
   release:
     types: [published]
+  schedule:
+    - cron: '17 * * * *'
   workflow_dispatch:
+    inputs:
+      operation:
+        description: 'Check status, or sync the latest public GitHub release'
+        type: choice
+        options: [status, sync]
+        default: status
 
 permissions:
   contents: read
@@ -14,18 +22,67 @@ concurrency:
 
 jobs:
   webstore:
+    if: github.event_name != 'release' || !github.event.release.prerelease
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     env:
-      CWS_OPERATION: ${{ github.event_name == 'release' && 'publish' || 'status' }}
-      RELEASE_VERSION: ${{ github.event.release.tag_name }}
+      CWS_OPERATION: ${{ github.event_name == 'workflow_dispatch' && inputs.operation || 'sync' }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
+      # Run trusted sync code from main; never rebuild or execute release assets.
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.release.tag_name || github.ref }}
+          ref: main
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Find latest public release
+        if: env.CWS_OPERATION == 'sync'
+        id: release
+        env:
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # GitHub excludes drafts and prereleases from /releases/latest.
+          if ! gh api "repos/$GH_REPO/releases/latest" > release.json 2> release-error.txt; then
+            if grep -q 'HTTP 404' release-error.txt; then
+              echo 'No public stable release to sync.' >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            cat release-error.txt >&2
+            exit 1
+          fi
+          tag=$(jq -r '.tag_name' release.json)
+          RELEASE_VERSION="$tag" node --input-type=module <<'NODE'
+          import { versionParts } from './scripts/release-version.mjs';
+          const tag = process.env.RELEASE_VERSION;
+          if (!tag.startsWith('v')) throw new Error('Expected a v-prefixed release tag.');
+          versionParts(tag.slice(1));
+          NODE
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "RELEASE_VERSION=$tag" >> "$GITHUB_ENV"
+
+      - name: Download and validate published ZIP
+        if: steps.release.outputs.tag != ''
+        env:
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir -p store-package
+          gh release download "$RELEASE_VERSION" --repo "$GH_REPO" \
+            --pattern "skill-vault-$RELEASE_VERSION.zip" --dir store-package
+          mv "store-package/skill-vault-$RELEASE_VERSION.zip" store-package/skill-vault.zip
+          unzip -p store-package/skill-vault.zip manifest.json > store-package/manifest.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const { version } = JSON.parse(fs.readFileSync('store-package/manifest.json', 'utf8'));
+          if (`v${version}` !== process.env.RELEASE_VERSION) {
+            throw new Error('Published ZIP manifest.version must match its release tag.');
+          }
+          NODE
 
       - name: Validate configuration
+        if: env.CWS_OPERATION == 'status' || steps.release.outputs.tag != ''
         env:
           CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
           CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
@@ -42,6 +99,7 @@ jobs:
           NODE
 
       - name: Check Chrome Web Store access
+        if: env.CWS_OPERATION == 'status' || steps.release.outputs.tag != ''
         id: access
         uses: cssnr/webstore-publish-action@9c4e7ae29beb517bf2d22f32d849455d178cbca6 # v1
         with:
@@ -50,107 +108,10 @@ jobs:
           json_data: ${{ secrets.CWS_SERVICE_ACCOUNT_JSON }}
           status: true
 
-      - uses: actions/setup-node@v7
-        if: env.CWS_OPERATION != 'status'
-        with:
-          node-version: '22'
-          cache: npm
-
-      - name: Validate extension version
-        if: env.CWS_OPERATION != 'status'
+      - name: Sync published ZIP to Chrome Web Store
+        if: steps.release.outputs.tag != ''
         env:
-          STORE_STATUS: ${{ steps.access.outputs.status }}
-        run: |
-          node <<'NODE'
-          const fs = require('node:fs');
-          const { version } = JSON.parse(fs.readFileSync('public/manifest.json', 'utf8'));
-          const parts = value => {
-            if (!/^\d+(\.\d+){0,3}$/.test(value)) throw new Error(`Invalid Chrome version: ${value}`);
-            return [...value.split('.').map(Number), 0, 0, 0].slice(0, 4);
-          };
-          const newer = (a, b) => {
-            const left = parts(a), right = parts(b);
-            for (let i = 0; i < 4; i++) {
-              if (left[i] !== right[i]) return left[i] > right[i];
-            }
-            return false;
-          };
-          parts(version);
-          if (process.env.RELEASE_VERSION !== `v${version}`) {
-            throw new Error('Published release tag must match public/manifest.json version.');
-          }
-          const status = JSON.parse(process.env.STORE_STATUS);
-          if (status.submittedItemRevisionStatus?.state === 'PENDING_REVIEW') {
-            throw new Error('An extension version is already pending review. Wait for that review to finish.');
-          }
-          for (const revision of [status.publishedItemRevisionStatus, status.submittedItemRevisionStatus]) {
-            for (const channel of revision?.distributionChannels || []) {
-              if (channel.crxVersion && !newer(version, channel.crxVersion)) {
-                throw new Error(`Increase manifest.version: store already contains ${channel.crxVersion}.`);
-              }
-            }
-          }
-          NODE
-
-      - name: Install dependencies
-        if: env.CWS_OPERATION != 'status'
-        run: npm ci
-
-      - name: Validate extension
-        if: env.CWS_OPERATION != 'status'
-        run: |
-          npm run format:check
-          npm run lint
-          npm run typecheck
-          npm test
-
-      - name: Build and package
-        if: env.CWS_OPERATION != 'status'
-        run: |
-          npm run build
-          node scripts/package.mjs
-
-      - name: Upload ZIP
-        if: env.CWS_OPERATION != 'status'
-        id: upload
-        uses: cssnr/webstore-publish-action@9c4e7ae29beb517bf2d22f32d849455d178cbca6 # v1
-        with:
-          publisher_id: ${{ vars.CWS_PUBLISHER_ID }}
-          extension_id: ${{ vars.CWS_EXTENSION_ID }}
-          token: ${{ steps.access.outputs.token }}
-          zip_file: skill-vault.zip
-
-      - name: Wait for upload processing
-        if: env.CWS_OPERATION != 'status'
-        env:
-          UPLOAD_RESULT: ${{ steps.upload.outputs.upload }}
           CWS_TOKEN: ${{ steps.access.outputs.token }}
           CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
           CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
-        run: |
-          state=$(jq -r '.uploadState' <<< "$UPLOAD_RESULT")
-          for attempt in {1..60}; do
-            case "$state" in
-              SUCCEEDED) exit 0 ;;
-              IN_PROGRESS|UPLOAD_IN_PROGRESS) ;;
-              *) echo "Upload failed or returned an unexpected state: $state"; exit 1 ;;
-            esac
-            sleep 5
-            response=$(curl --fail-with-body --silent --show-error \
-              -H "Authorization: Bearer $CWS_TOKEN" \
-              "https://chromewebstore.googleapis.com/v2/publishers/$CWS_PUBLISHER_ID/items/$CWS_EXTENSION_ID:fetchStatus")
-            state=$(jq -r '.lastAsyncUploadState' <<< "$response")
-          done
-          if [ "$state" = SUCCEEDED ]; then exit 0; fi
-          echo 'Upload did not finish within five minutes. Check the Developer Dashboard.'
-          exit 1
-
-      - name: Submit for review
-        if: env.CWS_OPERATION == 'publish'
-        uses: cssnr/webstore-publish-action@9c4e7ae29beb517bf2d22f32d849455d178cbca6 # v1
-        with:
-          publisher_id: ${{ vars.CWS_PUBLISHER_ID }}
-          extension_id: ${{ vars.CWS_EXTENSION_ID }}
-          token: ${{ steps.access.outputs.token }}
-          publish: default
-          status: true
+        run: node scripts/sync-chrome-web-store.mjs

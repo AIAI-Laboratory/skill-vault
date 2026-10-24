@@ -1,6 +1,6 @@
 {
   "name": "skill-vault",
-  "version": "0.1.1",
+  "version": "0.1.4",
   "private": true,
   "description": "Universal local-first skill and prompt layer for AI chat on the web",
   "type": "module",
@@ -18,7 +18,8 @@
     "setup:commits": "git config --local commit.template .gitmessage",
     "prepare": "husky",
     "test:coverage": "vitest run --coverage",
-    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:coverage && npm run build"
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:coverage && npm run build",
+    "version": "node scripts/sync-manifest-version.mjs"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs}": [
