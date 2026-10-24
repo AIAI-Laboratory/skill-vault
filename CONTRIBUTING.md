@@ -100,9 +100,25 @@ code, build, dependency, or workflow changes, run the same checks as CI:
 npm run format:check
 npm run lint
 npm run typecheck
-npm test
+npm run test:coverage
 npm run build
 ```
+
+CI requires formatting, ESLint with zero warnings, type checking, tests on Node.js
+20 and 22, coverage thresholds on Node.js 22, and a successful build. The
+`Quality Gate` fails if a required job fails, is cancelled, or is skipped.
+Coverage includes every TypeScript source file under `src/`, including untested
+files. Initial global minimums follow the measured baseline: 45% statements and
+lines, 70% branches, and 60% functions. Increase these minimums in `vite.config.ts`
+as tests improve; do not lower them to make a failing pull request pass.
+
+Open the Node.js 22 check summary for the coverage table and download the
+`coverage-report` artifact for HTML and LCOV reports. The `PR Coverage Report`
+workflow keeps one coverage comment on each pull request, including fork pull
+requests, after CI completes. Reports are still published when tests or coverage
+thresholds fail, if Vitest produced a report. If CI fails before producing
+coverage, the comment links to the failed run instead of showing old percentages.
+The reporting workflow must first be merged into the default branch to activate.
 
 For changes limited to documentation, check formatting and whitespace:
 
@@ -160,7 +176,10 @@ affected checks. Avoid rewriting a shared branch's history.
 
 ## 7. Merge and clean up
 
-A maintainer merges after review and passing CI. Prefer squash merging so each pull
+A maintainer merges after review, resolving review conversations, and passing CI.
+The default branch requires all four checks: `Code Quality`,
+`Build & Test (Node 20.x)`, `Build & Test (Node 22.x)`, and `Quality Gate`.
+The branch must be up to date before merging. Prefer squash merging so each pull
 request becomes one focused commit on `main`. Check the final squash title and body
 against the commit message guide; a non-`docs` squash commit still needs a meaningful
 body of at least 20 characters.
@@ -174,6 +193,12 @@ Releases are handled separately by maintainers. Version tags matching `v*` trigg
 the release workflow; do not create or push release tags as part of an ordinary
 contribution.
 
-These rules are followed through contributor and maintainer review. Branch naming,
-review requirements, and the merge method are not automatically enforced by this
-documentation setup.
+The active GitHub `pr-quality-gates` ruleset enforces pull requests, resolved review
+conversations, an up-to-date branch, and these required checks, with no bypass
+actors. Its configuration is tracked in
+[`.github/rulesets/pr-quality-gates.json`](.github/rulesets/pr-quality-gates.json).
+Tracking this JSON alone does not apply settings: repository admins must create
+or update the corresponding GitHub ruleset through Settings → Rules → Rulesets
+or the GitHub API. Keep other rulesets, such as `protect-main`, in place; their
+review requirements still apply. Branch names and the preferred squash merge
+method remain contributor conventions.

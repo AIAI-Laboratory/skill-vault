@@ -32,14 +32,16 @@ export type MessageType =
   | 'CLEAR_DRAFT_SKILL'
   | 'OPEN_SIDE_PANEL';
 
-export interface ExtensionMessage<T = any> {
-  id: string;
-  version: 1;
-  type: MessageType;
-  payload: T;
-}
+export type ExtensionMessage<K extends MessageType = MessageType> = {
+  [T in K]: {
+    id: string;
+    version: 1;
+    type: T;
+    payload: MessagePayloadMap[T];
+  };
+}[K];
 
-export interface ExtensionResponse<T = any> {
+export interface ExtensionResponse<T = unknown> {
   id: string;
   ok: boolean;
   data?: T;

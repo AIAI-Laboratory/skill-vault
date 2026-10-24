@@ -1,10 +1,4 @@
-import {
-  MessageType,
-  MessagePayloadMap,
-  MessageResponseMap,
-  ExtensionMessage,
-  ExtensionResponse,
-} from './protocol';
+import { MessageType, MessagePayloadMap, MessageResponseMap, ExtensionResponse } from './protocol';
 
 /**
  * Sends a type-safe message to the extension background service worker.
@@ -13,7 +7,7 @@ export async function sendExtensionMessage<K extends MessageType>(
   type: K,
   payload?: MessagePayloadMap[K]
 ): Promise<MessageResponseMap[K]> {
-  const message: ExtensionMessage<MessagePayloadMap[K]> = {
+  const message = {
     id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     version: 1,
     type,

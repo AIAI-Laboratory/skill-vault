@@ -6,10 +6,10 @@ import {
 } from '../../src/infrastructure/storage/repository';
 
 class MockStorageBackend implements StorageBackend {
-  private store: Record<string, any> = {};
+  private store: Record<string, unknown> = {};
 
-  async get(keys: string | string[]): Promise<Record<string, any>> {
-    const res: Record<string, any> = {};
+  async get(keys: string | string[]): Promise<Record<string, unknown>> {
+    const res: Record<string, unknown> = {};
     const list = Array.isArray(keys) ? keys : [keys];
     for (const k of list) {
       if (k in this.store) {
@@ -19,7 +19,7 @@ class MockStorageBackend implements StorageBackend {
     return res;
   }
 
-  async set(items: Record<string, any>): Promise<void> {
+  async set(items: Record<string, unknown>): Promise<void> {
     for (const [k, v] of Object.entries(items)) {
       this.store[k] = JSON.parse(JSON.stringify(v));
     }

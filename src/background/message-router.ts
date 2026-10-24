@@ -22,12 +22,12 @@ export function setupMessageRouter() {
         };
         sendResponse(response);
       })
-      .catch((err: any) => {
+      .catch((err: unknown) => {
         console.error(`[SkillVault][MessageRouter] Error handling ${msg.type}:`, err);
         const response: ExtensionResponse = {
           id: msg.id,
           ok: false,
-          error: err?.message || 'Internal error',
+          error: err instanceof Error ? err.message : 'Internal error',
         };
         sendResponse(response);
       });
@@ -37,7 +37,7 @@ export function setupMessageRouter() {
   });
 }
 
-async function handleMessage(msg: ExtensionMessage, repository: SkillRepository): Promise<any> {
+async function handleMessage(msg: ExtensionMessage, repository: SkillRepository): Promise<unknown> {
   switch (msg.type) {
     case 'SKILL_SEARCH': {
       const query = msg.payload?.query || '';

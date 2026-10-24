@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { skillMarkdown } from '../fixtures/skill-markdown';
 import { readPageSelection } from '../../src/content/selection';
 import {
@@ -9,9 +9,18 @@ import {
 } from '../../src/background/context-menu';
 
 describe('context-menu', () => {
-  let mockContextMenus: any;
-  let mockSidePanel: any;
-  let mockStorageLocal: any;
+  afterEach(() => vi.unstubAllGlobals());
+  let mockContextMenus: {
+    removeAll: ReturnType<typeof vi.fn<(cb: () => void) => void>>;
+    create: ReturnType<typeof vi.fn>;
+    onClicked: { addListener: ReturnType<typeof vi.fn> };
+  };
+  let mockSidePanel: { open: ReturnType<typeof vi.fn> };
+  let mockStorageLocal: {
+    set: ReturnType<typeof vi.fn>;
+    get: ReturnType<typeof vi.fn>;
+    remove: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
     mockContextMenus = {
@@ -32,13 +41,13 @@ describe('context-menu', () => {
       remove: vi.fn().mockResolvedValue(undefined),
     };
 
-    (globalThis as any).chrome = {
+    vi.stubGlobal('chrome', {
       contextMenus: mockContextMenus,
       sidePanel: mockSidePanel,
       storage: {
         local: mockStorageLocal,
       },
-    };
+    });
   });
 
   it('initContextMenu removes previous items and registers selection context menu', () => {
@@ -58,19 +67,19 @@ describe('context-menu', () => {
   });
 
   it('handleContextMenuClick synchronously opens side panel with windowId and saves draft', () => {
-    const info: any = {
+    const info = {
       menuItemId: CONTEXT_MENU_ID,
       selectionText: '  const a = 123;  ',
       pageUrl: 'https://example.com/test',
     };
-    const tab: any = {
+    const tab = {
       id: 99,
       windowId: 10,
       title: 'Example Page',
       url: 'https://example.com/test',
     };
 
-    handleContextMenuClick(info, tab);
+    handleContextMenuClick(info as chrome.contextMenus.OnClickData, tab as chrome.tabs.Tab);
 
     // 1. sidePanel.open called synchronously with windowId
     expect(mockSidePanel.open).toHaveBeenCalledWith({ windowId: 10 });
@@ -89,15 +98,15 @@ describe('context-menu', () => {
   });
 
   it('handleContextMenuClick opens sidePanel with tabId when windowId is missing', () => {
-    const info: any = {
+    const info = {
       menuItemId: CONTEXT_MENU_ID,
       selectionText: 'hello world',
     };
-    const tab: any = {
+    const tab = {
       id: 42,
     };
 
-    handleContextMenuClick(info, tab);
+    handleContextMenuClick(info as chrome.contextMenus.OnClickData, tab as chrome.tabs.Tab);
 
     expect(mockSidePanel.open).toHaveBeenCalledWith({ tabId: 42 });
     expect(mockStorageLocal.set).toHaveBeenCalledWith({
@@ -150,19 +159,19 @@ describe('context-menu', () => {
   });
 
   it('handleContextMenuClick ignores clicks when menuItemId is not matching or no selection', () => {
-    const infoWrongId: any = {
+    const infoWrongId = {
       menuItemId: 'other-menu-id',
       selectionText: 'some text',
     };
-    handleContextMenuClick(infoWrongId);
+    handleContextMenuClick(infoWrongId as chrome.contextMenus.OnClickData);
     expect(mockSidePanel.open).not.toHaveBeenCalled();
     expect(mockStorageLocal.set).not.toHaveBeenCalled();
 
-    const infoNoText: any = {
+    const infoNoText = {
       menuItemId: CONTEXT_MENU_ID,
       selectionText: '',
     };
-    handleContextMenuClick(infoNoText);
+    handleContextMenuClick(infoNoText as chrome.contextMenus.OnClickData);
     expect(mockSidePanel.open).not.toHaveBeenCalled();
     expect(mockStorageLocal.set).not.toHaveBeenCalled();
   });
