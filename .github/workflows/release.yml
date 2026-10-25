@@ -1,4 +1,8 @@
 name: Release Extension
+run-name: >-
+  ${{ github.event_name == 'push' && format('Build release ZIP · {0} · tag pushed', github.ref_name) ||
+      github.event_name == 'release' && format('Build release ZIP · {0} · release published', github.event.release.tag_name) ||
+      format('Build release ZIP · {0} · manual', inputs.tag_name || 'version from package.json') }}
 
 on:
   push:

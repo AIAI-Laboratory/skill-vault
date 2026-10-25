@@ -1,4 +1,10 @@
 name: Chrome Web Store
+run-name: >-
+  ${{ github.event_name == 'release' && format('Sync Chrome Web Store · {0} · release published', github.event.release.tag_name) ||
+      github.event_name == 'workflow_run' && format('Sync Chrome Web Store · after Release Extension #{0}', github.event.workflow_run.run_number) ||
+      github.event_name == 'schedule' && 'Sync Chrome Web Store · hourly check' ||
+      inputs.operation == 'sync' && 'Sync Chrome Web Store · manual' ||
+      'Check Chrome Web Store status · manual' }}
 
 on:
   release:
