@@ -1,6 +1,7 @@
 import { AdapterRegistry } from '../adapters/registry';
 import { AIAdapter, ComposerHandle, TextRange } from '../adapters/types';
 import { PageContext, Skill, SkillVaultSettings } from '../domain/types';
+import { toMathematicalMonospace } from '../domain/monospace';
 import { fillUserInput, hasUserInputSlot, renderPromptTemplate } from '../domain/variable';
 import { sendExtensionMessage } from '../infrastructure/messaging/client';
 import { FILL_SELECTION_MESSAGE, FillSelectionMessage } from '../infrastructure/messaging/protocol';
@@ -275,7 +276,11 @@ export class ContentRuntime {
     };
 
     const rendered = renderPromptTemplate(skill.content, {}, context);
-    const label = skill.shortcut ? `🏷️ /${skill.shortcut}` : `🏷️ ${skill.name}`;
+    // Store the displayed Unicode label so expansion uses the same text and UTF-16 offsets.
+    const label = toMathematicalMonospace(
+      skill.shortcut ? `🏷️ /${skill.shortcut}` : `🏷️ ${skill.name}`,
+      true
+    );
     this.skillLabels.set(label, rendered);
 
     try {
