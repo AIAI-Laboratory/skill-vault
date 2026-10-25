@@ -16,3 +16,7 @@ When creating commits or proposing commit messages, follow
 Use Skill Vault scopes from that guide and include a meaningful body of at least
 20 characters unless the type is `docs`. Consult the guide for reverts and
 breaking changes.
+
+When writing or modifying any function, follow the mandatory
+[function documentation rules](.agents/rules/function-documentation.md).
+Every function requires a doc comment, regardless of size or visibility.
