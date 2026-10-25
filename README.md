@@ -104,7 +104,7 @@ After updating an unpacked extension, reload it at `chrome://extensions` before 
    ```text
    /skill review
    ```
-4. Use <kbd>↑</kbd> and <kbd>↓</kbd> to navigate, and press <kbd>Enter</kbd> to insert the skill prompt directly into the composer.
+4. Use <kbd>↑</kbd> and <kbd>↓</kbd> to navigate, and press <kbd>Enter</kbd> to insert a skill label such as `🏷️ /𝚛𝚎𝚟𝚒𝚎𝚠`. ASCII letters and digits use Unicode monospace characters while preserving case. The label expands to the original prompt when you send the message.
 
 ### 3. Save Text from Any Webpage
 
