@@ -36,11 +36,23 @@ describe('runtime skill selection', () => {
     { shortcut: undefined, name: 'Đọc Code 2', label: '🏷️ Đọ𝚌 𝙲𝚘𝚍𝚎 𝟸' },
   ])(
     'expands monospace label $label with surrounding text intact',
+    /**
+     * Verifies that selecting a skill inserts its Unicode monospace label followed by a
+     * newline and expands all occurrences of the label when Enter is pressed.
+     *
+     * @param testCase - Skill metadata and expected rendered label for the test case.
+     */
     async ({ shortcut, name, label }) => {
       const settings = { ...DEFAULT_SETTINGS, customProviderUrls: [window.location.origin] };
       const addListener = vi.fn();
       vi.stubGlobal('chrome', { storage: { onChanged: { addListener, removeListener: vi.fn() } } });
       vi.mocked(sendExtensionMessage).mockImplementation(
+        /**
+         * Returns mock settings for `SETTINGS_GET` and an empty result list for other messages.
+         *
+         * @param type - The extension message type being sent.
+         * @returns A promise resolving to the mocked message payload.
+         */
         async (type) => (type === 'SETTINGS_GET' ? settings : []) as never
       );
 
@@ -77,10 +89,10 @@ describe('runtime skill selection', () => {
       onSelectCallback!(sampleSkill);
       await Promise.resolve();
 
-      expect(composer.value).toBe(`${prefix}${label}`);
+      expect(composer.value).toBe(`${prefix}${label}\n`);
 
       // Repeated labels exercise UTF-16 replacement offsets in descending order.
-      composer.value += `\nconst a = 1;\n${label}`;
+      composer.value += `const a = 1;\n${label}`;
 
       // Pressing Enter in the composer triggers label expansion
       composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));

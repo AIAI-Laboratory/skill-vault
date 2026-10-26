@@ -7,7 +7,7 @@ import {
   ComposerChangeCallback,
   DisposeFunction,
 } from './types';
-import { formatInsertedText, InsertedTextStyle } from './format-inserted-text';
+import { InsertedTextStyle } from './format-inserted-text';
 
 export class GeminiAdapter implements AIAdapter {
   readonly id = 'gemini';
@@ -97,7 +97,20 @@ export class GeminiAdapter implements AIAdapter {
     }
   }
 
-  async insertText(text: string, slashRange?: TextRange, style?: InsertedTextStyle): Promise<void> {
+  /**
+   * Inserts text into the active Gemini composer, replacing an optional slash command
+   * range and converting trailing newlines into paragraph breaks so the caret moves
+   * to the next line.
+   *
+   * @param text - Text content to insert into the composer.
+   * @param slashRange - Optional character range of the trigger command to replace.
+   * @param _style - Optional visual style hint; ignored in Gemini's rich-textarea.
+   */
+  async insertText(
+    text: string,
+    slashRange?: TextRange,
+    _style?: InsertedTextStyle
+  ): Promise<void> {
     const handle = this.findComposer();
     if (!handle) return;
 
@@ -114,28 +127,48 @@ export class GeminiAdapter implements AIAdapter {
       return;
     }
 
+    const trailingNewlines = text.match(/\n+$/)?.[0].length || 0;
+    const contentToInsert = trailingNewlines > 0 ? text.slice(0, -trailingNewlines) : text;
+
     if (slashRange) {
       this.selectRange(handle.element, slashRange.start, slashRange.end);
+    }
+
+    // Attempt direct insertText (replaces selected range without destroying parent <p>)
+    let success = document.execCommand('insertText', false, contentToInsert);
+
+    if (!success && slashRange) {
+      // Fallback: delete selection and try insertText again
       document.execCommand('delete');
+      success = document.execCommand('insertText', false, contentToInsert);
     }
 
-    const success = document.execCommand('insertText', false, text);
     if (!success) {
-      const inputEvt = new InputEvent('beforeinput', {
-        bubbles: true,
-        cancelable: true,
-        inputType: 'insertText',
-        data: text,
-      });
-      handle.element.dispatchEvent(inputEvt);
-      handle.element.textContent = text;
-      handle.element.dispatchEvent(new Event('input', { bubbles: true }));
+      // DOM fallback: ensure text is placed inside <p> to avoid breaking Gemini rich-textarea
+      let p = handle.element.querySelector('p');
+      if (!p) {
+        p = document.createElement('p');
+        handle.element.appendChild(p);
+      }
+      p.textContent = contentToInsert;
+
+      const range = document.createRange();
+      range.selectNodeContents(p);
+      range.collapse(false);
+      const sel = window.getSelection();
+      if (sel) {
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
     }
 
-    if (style && slashRange) {
-      const start = success ? slashRange.start : 0;
-      this.selectRange(handle.element, start, start + text.length);
-      formatInsertedText(style);
+    // Insert newlines using paragraph breaks (<p>) matching Gemini editor schema
+    if (trailingNewlines > 0) {
+      for (let i = 0; i < trailingNewlines; i++) {
+        if (!document.execCommand('insertParagraph')) {
+          document.execCommand('insertLineBreak');
+        }
+      }
     }
 
     handle.element.dispatchEvent(new Event('input', { bubbles: true }));
