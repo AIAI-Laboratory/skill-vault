@@ -1,6 +1,12 @@
 export type InsertedTextStyle = 'highlight' | 'plain';
 
-export function formatInsertedText(style: InsertedTextStyle) {
+/**
+ * Applies or clears inline formatting on the current editor selection, then collapses
+ * the selection to the end of the formatted range.
+ *
+ * @param style - Visual style to apply to the selected inserted text.
+ */
+export function formatInsertedText(style: InsertedTextStyle): void {
   if (style === 'highlight') {
     if (!document.execCommand('hiliteColor', false, '#ffe08a'))
       document.execCommand('backColor', false, '#ffe08a');
@@ -16,4 +22,8 @@ export function formatInsertedText(style: InsertedTextStyle) {
   range.collapse(false);
   selection.removeAllRanges();
   selection.addRange(range);
+
+  if (style === 'highlight') {
+    document.execCommand('removeFormat');
+  }
 }
