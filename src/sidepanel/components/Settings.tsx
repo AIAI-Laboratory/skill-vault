@@ -2,7 +2,7 @@ import { GeminiKeySettings } from './GeminiKeySettings';
 import { normalizeProviderUrl, providerMatchPattern } from '../../domain/custom-provider';
 import { Input } from '@/components/ui/input';
 import { useRef, useState } from 'react';
-import { Plus, Trash2, Download, Upload } from 'lucide-react';
+import { Plus, Trash2, Download, Upload, Sun, Moon, Monitor } from 'lucide-react';
 import { SkillVaultSettings } from '../../domain/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -175,8 +175,8 @@ export function Settings({
               })}
             </FieldGroup>
           </FieldSet>
-          <FieldSet className="mt-5 gap-3">
-            <FieldLegend className="mb-0 font-semibold">Custom providers</FieldLegend>
+          <FieldSet className="mt-5 gap-2">
+            <FieldLegend className="sr-only">Custom providers</FieldLegend>
             <form
               onSubmit={(event) => {
                 event.preventDefault();
@@ -196,7 +196,7 @@ export function Settings({
                     <Input
                       id="custom-provider-url"
                       type="url"
-                      className="bg-muted"
+                      className="h-10 bg-background text-base md:text-base"
                       placeholder="https://chat.example.com"
                       value={providerUrl}
                       disabled={updating}
@@ -215,7 +215,7 @@ export function Settings({
                   <Button
                     type="submit"
                     aria-label="Add custom provider"
-                    className="h-8 shrink-0 px-4"
+                    className="h-10 shrink-0 px-4"
                     disabled={updating}
                   >
                     {updating ? (
@@ -231,6 +231,7 @@ export function Settings({
                 )}
               </FieldGroup>
             </form>
+            <FieldDescription>Custom providers</FieldDescription>
           </FieldSet>
         </CardContent>
       </Card>
@@ -251,13 +252,16 @@ export function Settings({
             }}
             className="w-full"
           >
-            <ToggleGroupItem value="light" className="flex-1">
+            <ToggleGroupItem value="light" className="flex-1 gap-2">
+              <Sun />
               Light
             </ToggleGroupItem>
-            <ToggleGroupItem value="dark" className="flex-1">
+            <ToggleGroupItem value="dark" className="flex-1 gap-2">
+              <Moon />
               Dark
             </ToggleGroupItem>
-            <ToggleGroupItem value="system" className="flex-1">
+            <ToggleGroupItem value="system" className="flex-1 gap-2">
+              <Monitor />
               System
             </ToggleGroupItem>
           </ToggleGroup>

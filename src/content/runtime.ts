@@ -3,7 +3,11 @@ import { AIAdapter, ComposerHandle, TextRange } from '../adapters/types';
 import { PageContext, Skill, SkillVaultSettings } from '../domain/types';
 import { fillUserInput, hasUserInputSlot, renderPromptTemplate } from '../domain/variable';
 import { sendExtensionMessage } from '../infrastructure/messaging/client';
-import { FILL_SELECTION_MESSAGE, FillSelectionMessage } from '../infrastructure/messaging/protocol';
+import {
+  FILL_SELECTION_MESSAGE,
+  FillSelectionMessage,
+  SKILL_DRAG_TYPE,
+} from '../infrastructure/messaging/protocol';
 import { parseSlashCommand } from './slash/parser';
 import { PaletteUI } from './palette/palette-ui';
 
@@ -77,6 +81,32 @@ export class ContentRuntime {
 
   private onDocumentInput = (e: Event) => {
     if (this.resolveComposer(e.target)) void this.handleInput();
+  };
+
+  private onDocumentDragOver = (event: DragEvent) => {
+    if (
+      this.resolveComposer(event.target) &&
+      Array.from(event.dataTransfer?.types ?? []).includes(SKILL_DRAG_TYPE)
+    ) {
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+    }
+  };
+
+  private onDocumentDrop = async (event: DragEvent) => {
+    const composer = this.resolveComposer(event.target);
+    const id = event.dataTransfer?.getData(SKILL_DRAG_TYPE);
+    if (!composer || !id) return;
+    event.preventDefault();
+    this.currentComposer = composer;
+    this.activeSlashRange = null;
+    try {
+      const skill = await sendExtensionMessage('SKILL_GET', { id });
+      if (!this.disposed && skill) await this.handleSkillSelected(skill);
+    } catch (error) {
+      if (!this.stopIfExtensionContextInvalidated(error))
+        console.warn('[SkillVault] Failed to load dragged skill:', error);
+    }
   };
 
   private onDocumentKeyDown = (e: KeyboardEvent) => {
@@ -173,6 +203,8 @@ export class ContentRuntime {
     document.addEventListener('click', this.onDocumentClick, true);
     document.addEventListener('focusout', this.onDocumentFocusOut, true);
     document.addEventListener('contextmenu', this.onDocumentContextMenu, true);
+    document.addEventListener('dragover', this.onDocumentDragOver, true);
+    document.addEventListener('drop', this.onDocumentDrop, true);
     chrome.runtime?.onMessage?.addListener(this.onRuntimeMessage);
     const revision = this.settingsRevision;
     void sendExtensionMessage('SETTINGS_GET')
@@ -386,6 +418,8 @@ export class ContentRuntime {
     document.removeEventListener('click', this.onDocumentClick, true);
     document.removeEventListener('focusout', this.onDocumentFocusOut, true);
     document.removeEventListener('contextmenu', this.onDocumentContextMenu, true);
+    document.removeEventListener('dragover', this.onDocumentDragOver, true);
+    document.removeEventListener('drop', this.onDocumentDrop, true);
     try {
       chrome.storage?.onChanged?.removeListener(this.handleSettingsChange);
       chrome.runtime?.onMessage?.removeListener(this.onRuntimeMessage);

@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { SKILL_DRAG_TYPE } from '../../infrastructure/messaging/protocol';
 
 interface SkillCardProps {
   skill: Skill;
@@ -56,7 +57,23 @@ export function SkillCard({
   };
 
   return (
-    <Card size="sm" className="w-full min-w-0 shrink-0 gap-0 py-0 select-none">
+    <Card
+      size="sm"
+      className="w-full min-w-0 shrink-0 gap-0 py-0 cursor-grab select-none active:cursor-grabbing"
+      draggable
+      onDragStart={(event) => {
+        if ((event.target as HTMLElement).closest('button')) {
+          event.preventDefault();
+          return;
+        }
+        event.dataTransfer.setData(SKILL_DRAG_TYPE, skill.id);
+        event.dataTransfer.setData(
+          'text/plain',
+          `🏷️ ${skill.shortcut ? `/${skill.shortcut}` : skill.name}`
+        );
+        event.dataTransfer.effectAllowed = 'copy';
+      }}
+    >
       <div className="flex min-w-0 items-center gap-2 p-3 pb-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <CardTitle className="min-w-0 flex-1 truncate" title={skill.name}>
