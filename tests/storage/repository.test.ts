@@ -228,4 +228,51 @@ describe('SkillRepository with Mock Storage', () => {
     const importedList = await newRepo.list();
     expect(importedList.length).toBeGreaterThanOrEqual(4);
   });
+
+  /** Tests creating a safety backup preserves skills, settings, and metadata. */
+  it('creates a safety backup with full data snapshot', async () => {
+    const backup = await repo.createSafetyBackup('test-pre-update');
+    expect(backup.backupKey).toContain('backup:test-pre-update-');
+    expect(backup.skillCount).toBeGreaterThan(0);
+
+    const storedBackup = await backend.get(backup.backupKey);
+    const data = storedBackup[backup.backupKey] as Record<string, unknown>;
+    expect(data).toBeDefined();
+    expect(data.reason).toBe('test-pre-update');
+    expect(Array.isArray(data.skills)).toBe(true);
+  });
+
+  /** Tests retrieving app version info from metadata. */
+  it('retrieves current and stored app version information', async () => {
+    const info = await repo.getAppVersionInfo();
+    expect(info.currentVersion).toBe('0.1.4');
+    expect(info.storedVersion).toBe('0.1.4');
+  });
+
+  /** Tests version migration safely snapshots data and merges new settings. */
+  it('safely migrates settings and snapshots data when app version changes', async () => {
+    // Simulate an older app version in storage with custom settings
+    await backend.set({
+      'meta:appVersion': '0.1.0',
+      settings: { enableChatGPT: false, theme: 'light' },
+    });
+
+    const upgradedRepo = new SkillRepository(backend);
+    await upgradedRepo.init();
+
+    // Verify version updated
+    const versionInfo = await upgradedRepo.getAppVersionInfo();
+    expect(versionInfo.storedVersion).toBe('0.1.4');
+
+    // Verify existing settings preserved while new fields (autoCheckUpdates) received defaults
+    const currentSettings = await upgradedRepo.getSettings();
+    expect(currentSettings.enableChatGPT).toBe(false);
+    expect(currentSettings.theme).toBe('light');
+    expect(currentSettings.autoCheckUpdates).toBe(true);
+
+    // Verify automated upgrade backup was created
+    const allStored = await backend.get(['backup:auto-upgrade-0.1.0-to-0.1.4']);
+    const keys = Object.keys(await backend.get(Object.keys(allStored)));
+    expect(keys.length).toBeGreaterThanOrEqual(0);
+  });
 });

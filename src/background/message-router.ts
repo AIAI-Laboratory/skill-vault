@@ -4,6 +4,7 @@ import { SkillRepository } from '../infrastructure/storage/repository';
 import { ExtensionMessage, ExtensionResponse } from '../infrastructure/messaging/protocol';
 import { enqueueTask } from './task-queue';
 import { refreshTrashCleanup } from './trash-cleanup';
+import { checkForUpdates, getStoredUpdateStatus, applyUpdate } from './updater';
 
 export function setupMessageRouter() {
   const repository = SkillRepository.getInstance();
@@ -99,6 +100,15 @@ async function handleMessage(msg: ExtensionMessage, repository: SkillRepository)
     case 'CLEAR_DRAFT_SKILL': {
       await chrome.storage.local.remove('draft:skill');
       return true;
+    }
+    case 'CHECK_FOR_UPDATES': {
+      return await checkForUpdates();
+    }
+    case 'GET_UPDATE_STATUS': {
+      return await getStoredUpdateStatus();
+    }
+    case 'APPLY_UPDATE': {
+      return await applyUpdate(repository);
     }
     default:
       throw new Error(`Unknown message type: ${msg.type}`);

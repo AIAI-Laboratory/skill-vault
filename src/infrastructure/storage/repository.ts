@@ -1,4 +1,5 @@
 import { normalizeProviderUrls } from '../../domain/custom-provider';
+import { getCurrentAppVersion } from '../../domain/version';
 import {
   Skill,
   CreateSkillInput,
@@ -77,14 +78,23 @@ export class SkillRepository {
   }
 
   /**
-   * Initializes the repository, seeding default skills if empty.
+   * Initializes the repository, seeding default skills if empty,
+   * or safely performing version migration and pre-update snapshots.
    */
   async init(): Promise<void> {
-    const meta = await this.backend.get(['meta:schemaVersion', 'skill:index']);
+    const currentAppVersion = getCurrentAppVersion();
+    const meta = await this.backend.get([
+      'meta:schemaVersion',
+      'skill:index',
+      'meta:appVersion',
+      'settings',
+    ]);
+
     if (!meta['meta:schemaVersion'] || !meta['skill:index']) {
       // Seed initial skills
       const itemsToSet: Record<string, unknown> = {
         'meta:schemaVersion': CURRENT_SCHEMA_VERSION,
+        'meta:appVersion': currentAppVersion,
         settings: DEFAULT_SETTINGS,
       };
       const index: string[] = [];
@@ -96,7 +106,74 @@ export class SkillRepository {
       itemsToSet['skill:index'] = index;
 
       await this.backend.set(itemsToSet);
+      return;
     }
+
+    // Safely snapshot state and migrate new settings if the app version was upgraded
+    const storedAppVersion = meta['meta:appVersion'] as string | undefined;
+    if (!storedAppVersion || storedAppVersion !== currentAppVersion) {
+      await this.createSafetyBackup(
+        `auto-upgrade-${storedAppVersion || 'initial'}-to-${currentAppVersion}`
+      );
+
+      const existingSettings = (meta['settings'] as Partial<SkillVaultSettings>) || {};
+      const mergedSettings: SkillVaultSettings = {
+        ...DEFAULT_SETTINGS,
+        ...existingSettings,
+      };
+
+      await this.backend.set({
+        'meta:appVersion': currentAppVersion,
+        settings: mergedSettings,
+      });
+    }
+  }
+
+  /**
+   * Creates a timestamped safety backup in storage to prevent data loss across updates.
+   *
+   * @param reason - A label describing the trigger for this safety backup (e.g. "pre-update").
+   * @returns Backup summary containing the key, timestamp, and number of preserved skills.
+   */
+  async createSafetyBackup(
+    reason = 'manual'
+  ): Promise<{ backupKey: string; skillCount: number; timestamp: number }> {
+    const skills = await this.list();
+    const settings = await this.getSettings();
+    const trash = await this.listTrash();
+    const timestamp = Date.now();
+    const backupKey = `backup:${reason}-${timestamp}`;
+    const backupData = {
+      backupKey,
+      reason,
+      timestamp,
+      createdAt: new Date(timestamp).toISOString(),
+      appVersion: getCurrentAppVersion(),
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      skills,
+      settings,
+      trash,
+    };
+    await this.backend.set({ [backupKey]: backupData });
+    return {
+      backupKey,
+      skillCount: skills.length,
+      timestamp,
+    };
+  }
+
+  /**
+   * Retrieves the active app version and any previously stored version from metadata.
+   *
+   * @returns Object containing the active version and stored version string if available.
+   */
+  async getAppVersionInfo(): Promise<{ currentVersion: string; storedVersion?: string }> {
+    const data = await this.backend.get('meta:appVersion');
+    return {
+      currentVersion: getCurrentAppVersion(),
+      storedVersion:
+        typeof data['meta:appVersion'] === 'string' ? data['meta:appVersion'] : undefined,
+    };
   }
 
   /**
