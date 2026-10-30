@@ -5,6 +5,7 @@ import {
   SkillSearchResult,
   SkillVaultSettings,
   TrashedSkill,
+  UpdateInfo,
 } from '../../domain/types';
 import type { DraftSkill } from '../../domain/types';
 
@@ -31,16 +32,21 @@ export type MessageType =
   | 'SETTINGS_UPDATE'
   | 'GET_DRAFT_SKILL'
   | 'CLEAR_DRAFT_SKILL'
-  | 'OPEN_SIDE_PANEL';
+  | 'OPEN_SIDE_PANEL'
+  | 'CHECK_FOR_UPDATES'
+  | 'GET_UPDATE_STATUS'
+  | 'APPLY_UPDATE';
 
-export interface ExtensionMessage<T = any> {
-  id: string;
-  version: 1;
-  type: MessageType;
-  payload: T;
-}
+export type ExtensionMessage<K extends MessageType = MessageType> = {
+  [T in K]: {
+    id: string;
+    version: 1;
+    type: T;
+    payload: MessagePayloadMap[T];
+  };
+}[K];
 
-export interface ExtensionResponse<T = any> {
+export interface ExtensionResponse<T = unknown> {
   id: string;
   ok: boolean;
   data?: T;
@@ -63,6 +69,9 @@ export interface MessagePayloadMap {
   GET_DRAFT_SKILL: undefined;
   CLEAR_DRAFT_SKILL: undefined;
   OPEN_SIDE_PANEL: undefined;
+  CHECK_FOR_UPDATES: { force?: boolean } | undefined;
+  GET_UPDATE_STATUS: undefined;
+  APPLY_UPDATE: undefined;
 }
 
 export interface MessageResponseMap {
@@ -80,4 +89,12 @@ export interface MessageResponseMap {
   GET_DRAFT_SKILL: DraftSkill | null;
   CLEAR_DRAFT_SKILL: boolean;
   OPEN_SIDE_PANEL: boolean;
+  CHECK_FOR_UPDATES: UpdateInfo;
+  GET_UPDATE_STATUS: UpdateInfo;
+  APPLY_UPDATE: {
+    success: boolean;
+    reloadTriggered: boolean;
+    message: string;
+    downloadUrl?: string;
+  };
 }

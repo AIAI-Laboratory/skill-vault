@@ -7,7 +7,7 @@ import {
   ComposerChangeCallback,
   DisposeFunction,
 } from './types';
-import { formatInsertedText, InsertedTextStyle } from './format-inserted-text';
+import { InsertedTextStyle } from './format-inserted-text';
 
 export class ChatGPTAdapter implements AIAdapter {
   readonly id = 'chatgpt';
@@ -103,7 +103,20 @@ export class ChatGPTAdapter implements AIAdapter {
     };
   }
 
-  async insertText(text: string, slashRange?: TextRange, style?: InsertedTextStyle): Promise<void> {
+  /**
+   * Inserts text into the active ChatGPT composer, replacing an optional slash command
+   * range and converting trailing newlines into paragraph breaks so ProseMirror moves
+   * the caret to a new paragraph line.
+   *
+   * @param text - Text content to insert into the composer.
+   * @param slashRange - Optional character range of the trigger command to replace.
+   * @param _style - Optional inline formatting style hint; ignored in ProseMirror.
+   */
+  async insertText(
+    text: string,
+    slashRange?: TextRange,
+    _style?: InsertedTextStyle
+  ): Promise<void> {
     const handle = this.findComposer();
     if (!handle) return;
 
@@ -121,33 +134,53 @@ export class ChatGPTAdapter implements AIAdapter {
     }
 
     // Contenteditable / ProseMirror
-    const sel = window.getSelection();
-    if (slashRange && sel) {
-      // Select the slash range inside the contenteditable
+    const trailingNewlines = text.match(/\n+$/)?.[0].length || 0;
+    const contentToInsert = trailingNewlines > 0 ? text.slice(0, -trailingNewlines) : text;
+
+    if (slashRange) {
       this.selectRange(handle.element, slashRange.start, slashRange.end);
-      document.execCommand('delete');
     }
 
-    // Attempt execCommand insertText first (best for ProseMirror)
-    const success = document.execCommand('insertText', false, text);
+    // Attempt direct insertText first so the parent <p> is preserved in ProseMirror
+    let success = document.execCommand('insertText', false, contentToInsert);
+    if (!success && slashRange) {
+      document.execCommand('delete');
+      success = document.execCommand('insertText', false, contentToInsert);
+    }
+
     if (!success) {
-      // Fallback: Dispatch InputEvent
       const inputEvent = new InputEvent('beforeinput', {
         bubbles: true,
         cancelable: true,
         inputType: 'insertText',
-        data: text,
+        data: contentToInsert,
       });
       handle.element.dispatchEvent(inputEvent);
 
-      handle.element.textContent = text;
-      handle.element.dispatchEvent(new Event('input', { bubbles: true }));
+      let p = handle.element.querySelector('p');
+      if (!p) {
+        p = document.createElement('p');
+        handle.element.appendChild(p);
+      }
+      p.textContent = contentToInsert;
+
+      const range = document.createRange();
+      range.selectNodeContents(p);
+      range.collapse(false);
+      const sel = window.getSelection();
+      if (sel) {
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
     }
 
-    if (style && slashRange) {
-      const start = success ? slashRange.start : 0;
-      this.selectRange(handle.element, start, start + text.length);
-      formatInsertedText(style);
+    // Split into a new <p> block so ProseMirror creates a new line instead of a space
+    if (trailingNewlines > 0) {
+      for (let i = 0; i < trailingNewlines; i++) {
+        if (!document.execCommand('insertParagraph')) {
+          document.execCommand('insertLineBreak');
+        }
+      }
     }
 
     // Dispatch change event
@@ -197,7 +230,7 @@ export class ChatGPTAdapter implements AIAdapter {
 
   observeComposer(callback: ComposerChangeCallback): DisposeFunction {
     let lastEl = this.findComposer()?.element;
-    let timer: any = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
     const check = () => {
       const current = this.findComposer();

@@ -11,11 +11,7 @@ import {
   TRASH_CLEANUP_ALARM,
 } from '../../src/background/trash-cleanup';
 import { enqueueTask } from '../../src/background/task-queue';
-import {
-  ExtensionMessage,
-  ExtensionResponse,
-  MessageType,
-} from '../../src/infrastructure/messaging/protocol';
+import { ExtensionMessage, ExtensionResponse } from '../../src/infrastructure/messaging/protocol';
 
 describe('trash background lifecycle', () => {
   let repository: SkillRepository;
@@ -73,11 +69,16 @@ describe('trash background lifecycle', () => {
     vi.useRealTimers();
   });
 
-  function send(type: MessageType, id?: string): Promise<ExtensionResponse> {
+  function send(
+    type: 'SKILL_DELETE' | 'SKILL_RESTORE' | 'SKILL_LIST' | 'SKILL_TRASH_LIST',
+    id = ''
+  ): Promise<ExtensionResponse> {
     return new Promise((resolve) => {
-      expect(receiveMessage({ id: 'test', version: 1, type, payload: { id } }, {}, resolve)).toBe(
-        true
-      );
+      const message: ExtensionMessage =
+        type === 'SKILL_LIST' || type === 'SKILL_TRASH_LIST'
+          ? { id: 'test', version: 1, type, payload: undefined }
+          : { id: 'test', version: 1, type, payload: { id } };
+      expect(receiveMessage(message, {}, resolve)).toBe(true);
     });
   }
 

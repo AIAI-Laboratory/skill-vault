@@ -1,0 +1,113 @@
+name: Chrome Web Store
+run-name: >-
+  ${{ github.event_name == 'release' && format('Sync Chrome Web Store · {0} · release published', github.event.release.tag_name) ||
+      github.event_name == 'workflow_run' && format('Sync Chrome Web Store · after Release Extension #{0}', github.event.workflow_run.run_number) ||
+      github.event_name == 'schedule' && 'Sync Chrome Web Store · hourly check' ||
+      inputs.operation == 'sync' && 'Sync Chrome Web Store · manual' ||
+      'Check Chrome Web Store status · manual' }}
+
+on:
+  release:
+    types: [published]
+  workflow_run:
+    workflows: [Release Extension]
+    types: [completed]
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: 'Check status, or sync the latest public GitHub release'
+        type: choice
+        options: [status, sync]
+        default: status
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chrome-web-store
+  cancel-in-progress: false
+
+jobs:
+  webstore:
+    if: >-
+      (github.event_name != 'release' || !github.event.release.prerelease) &&
+      (github.event_name != 'workflow_run' ||
+        (github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.head_repository.full_name == github.repository &&
+         github.event.workflow_run.event != 'pull_request'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CWS_OPERATION: ${{ github.event_name == 'workflow_dispatch' && inputs.operation || 'sync' }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      # Run trusted sync code from main; never rebuild or execute release assets.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Find latest public release
+        if: env.CWS_OPERATION == 'sync'
+        id: release
+        env:
+          GH_REPO: ${{ github.repository }}
+        run: node scripts/store-release.mjs
+
+      - name: Download and validate published ZIP
+        if: steps.release.outputs.tag != ''
+        env:
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir -p store-package
+          gh release download "$RELEASE_VERSION" --repo "$GH_REPO" \
+            --pattern "skill-vault-$RELEASE_VERSION.zip" --dir store-package
+          mv "store-package/skill-vault-$RELEASE_VERSION.zip" store-package/skill-vault.zip
+          unzip -p store-package/skill-vault.zip manifest.json > store-package/manifest.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const { version } = JSON.parse(fs.readFileSync('store-package/manifest.json', 'utf8'));
+          if (`v${version}` !== process.env.RELEASE_VERSION) {
+            throw new Error('Published ZIP manifest.version must match its release tag.');
+          }
+          NODE
+
+      - name: Validate configuration
+        if: env.CWS_OPERATION == 'status' || steps.release.outputs.tag != ''
+        env:
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
+          CWS_SERVICE_ACCOUNT_JSON: ${{ secrets.CWS_SERVICE_ACCOUNT_JSON }}
+        run: |
+          node <<'NODE'
+          for (const key of ['CWS_PUBLISHER_ID', 'CWS_EXTENSION_ID', 'CWS_SERVICE_ACCOUNT_JSON']) {
+            if (!process.env[key]) throw new Error(`Missing GitHub configuration: ${key}`);
+          }
+          const credentials = JSON.parse(process.env.CWS_SERVICE_ACCOUNT_JSON);
+          if (credentials.type !== 'service_account' || !credentials.client_email || !credentials.private_key) {
+            throw new Error('CWS_SERVICE_ACCOUNT_JSON must contain a complete service account JSON key.');
+          }
+          NODE
+
+      - name: Check Chrome Web Store access
+        if: env.CWS_OPERATION == 'status' || steps.release.outputs.tag != ''
+        id: access
+        uses: cssnr/webstore-publish-action@9c4e7ae29beb517bf2d22f32d849455d178cbca6 # v1
+        with:
+          publisher_id: ${{ vars.CWS_PUBLISHER_ID }}
+          extension_id: ${{ vars.CWS_EXTENSION_ID }}
+          json_data: ${{ secrets.CWS_SERVICE_ACCOUNT_JSON }}
+          status: true
+
+      - name: Sync published ZIP to Chrome Web Store
+        if: steps.release.outputs.tag != ''
+        env:
+          CWS_TOKEN: ${{ steps.access.outputs.token }}
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
+        run: node scripts/sync-chrome-web-store.mjs

@@ -6,12 +6,16 @@ import {
   AlertCircle,
   Layers3,
   BookOpen,
+  Sparkles,
+  ArrowUpCircle,
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster, toast } from '@/components/ui/toast';
 import {
@@ -20,8 +24,10 @@ import {
   CreateSkillInput,
   SkillVaultSettings,
   DEFAULT_SETTINGS,
+  DraftSkill,
+  UpdateInfo,
 } from '../domain/types';
-import { DraftSkill } from '../domain/types';
+import { getCurrentAppVersionName } from '../domain/version';
 import { sendExtensionMessage } from '../infrastructure/messaging/client';
 import { SkillRepository } from '../infrastructure/storage/repository';
 import { SearchBar } from './components/SearchBar';
@@ -48,6 +54,13 @@ export const App: React.FC = () => {
 
   // Draft text from right-click context menu
   const [draftSkill, setDraftSkill] = useState<DraftSkill | null>(null);
+
+  // Update State
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [applyingUpdate, setApplyingUpdate] = useState(false);
+  const [updateDismissed, setUpdateDismissed] = useState(false);
+  const appVersion = getCurrentAppVersionName();
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -124,12 +137,67 @@ export const App: React.FC = () => {
     }
   };
 
+  /**
+   * Retrieves the cached update information from extension storage.
+   */
+  const loadUpdateStatus = async () => {
+    try {
+      const status = await sendExtensionMessage('GET_UPDATE_STATUS');
+      setUpdateInfo(status);
+    } catch (err) {
+      console.warn('Could not load update status:', err);
+    }
+  };
+
+  /**
+   * Triggers an update check against remote releases.
+   */
+  const handleCheckForUpdates = async () => {
+    setCheckingUpdate(true);
+    try {
+      const status = await sendExtensionMessage('CHECK_FOR_UPDATES');
+      setUpdateInfo(status);
+      if (status.hasUpdate) {
+        showToast(`Version v${status.latestVersion} is available!`);
+      } else if (status.status === 'up_to_date') {
+        showToast("You're on the latest version.");
+      } else if (status.status === 'error') {
+        showToast(status.errorMessage || 'Could not check for updates');
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not check for updates');
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
+
+  /**
+   * Initiates the update process, creating a safety snapshot and reloading the extension.
+   */
+  const handleApplyUpdate = async () => {
+    setApplyingUpdate(true);
+    try {
+      const res = await sendExtensionMessage('APPLY_UPDATE');
+      showToast(res.message);
+      if (res.downloadUrl && !res.reloadTriggered) {
+        window.open(res.downloadUrl, '_blank', 'noopener,noreferrer');
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not apply update');
+    } finally {
+      setApplyingUpdate(false);
+    }
+  };
+
   useEffect(() => {
-    loadSkills();
-    loadTrash();
-    loadSettings();
+    // These loaders only update state after asynchronous extension reads settle.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadSkills();
+    void loadTrash();
+    void loadSettings();
     void loadGeminiStatus();
-    checkDraftSkill();
+    void checkDraftSkill();
+    void loadUpdateStatus();
 
     // Periodic check or storage listener for draft skill
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
@@ -149,6 +217,9 @@ export const App: React.FC = () => {
         }
         if (changes['skill:trash']) {
           loadTrash();
+        }
+        if (changes['meta:update_status']) {
+          void loadUpdateStatus();
         }
       };
       chrome.storage.onChanged.addListener(listener);
@@ -223,8 +294,8 @@ export const App: React.FC = () => {
       await sendExtensionMessage('SKILL_DELETE', { id });
       showToast('Moved to trash. Automatically deleted after 24 hours.');
       await Promise.all([loadSkills(), loadTrash()]);
-    } catch (err: any) {
-      showToast(err.message || 'Failed to delete');
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to delete');
     }
   };
 
@@ -247,8 +318,8 @@ export const App: React.FC = () => {
     try {
       await sendExtensionMessage('SKILL_UPDATE', { id, patch: { favorite: !current } });
       await loadSkills();
-    } catch (err: any) {
-      showToast(err.message || 'Failed to update favorite');
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to update favorite');
     }
   };
 
@@ -292,7 +363,7 @@ export const App: React.FC = () => {
     try {
       const text = await file.text();
       const parsed = JSON.parse(text);
-      const skillsToImport: any[] = Array.isArray(parsed) ? parsed : parsed.skills;
+      const skillsToImport: CreateSkillInput[] = Array.isArray(parsed) ? parsed : parsed.skills;
 
       if (!Array.isArray(skillsToImport)) {
         throw new Error('Invalid backup file: no skills found.');
@@ -312,8 +383,8 @@ export const App: React.FC = () => {
 
       await loadSkills();
       showToast(`Imported ${count} skills!`);
-    } catch (err: any) {
-      showToast(err.message || 'Import failed');
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Import failed');
     }
   };
 
@@ -378,7 +449,15 @@ export const App: React.FC = () => {
               <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
                 <Layers3 className="size-[18px]" />
               </div>
-              <p className="text-base font-semibold tracking-tight">Skill Vault</p>
+              <div className="flex items-center gap-2">
+                <p className="text-base font-semibold tracking-tight">Skill Vault</p>
+                <Badge
+                  variant="outline"
+                  className="font-mono text-[10px] font-normal tracking-tight text-muted-foreground"
+                >
+                  {appVersion}
+                </Badge>
+              </div>
             </button>
             {isEditing ? (
               <Button
@@ -463,6 +542,55 @@ export const App: React.FC = () => {
           </main>
         ) : (
           <main className="flex flex-1 flex-col px-5 pt-5 pb-6">
+            {updateInfo?.hasUpdate && !updateDismissed && (
+              <Alert className="mb-5 border-primary/30 bg-primary/5">
+                <Sparkles className="size-4 text-primary" />
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <AlertTitle className="text-sm font-semibold text-foreground">
+                      Version {updateInfo.latestVersion ? `v${updateInfo.latestVersion}` : ''}{' '}
+                      available
+                    </AlertTitle>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Dismiss update banner"
+                      onClick={() => setUpdateDismissed(true)}
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  </div>
+                  <AlertDescription className="text-xs text-muted-foreground">
+                    <p className="line-clamp-2">
+                      {updateInfo.releaseName || 'A new release is available with improvements.'}
+                    </p>
+                    <div className="mt-2.5 flex items-center gap-2">
+                      <Button
+                        size="xs"
+                        onClick={() => void handleApplyUpdate()}
+                        disabled={applyingUpdate}
+                        className="h-7 text-xs"
+                      >
+                        {applyingUpdate ? (
+                          <Spinner data-icon="inline-start" />
+                        ) : (
+                          <ArrowUpCircle data-icon="inline-start" />
+                        )}
+                        Update now
+                      </Button>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        onClick={() => setActiveTab('settings')}
+                        className="h-7 text-xs"
+                      >
+                        View details
+                      </Button>
+                    </div>
+                  </AlertDescription>
+                </div>
+              </Alert>
+            )}
             {draftSkill && (
               <Alert className="mb-5">
                 <AlertCircle />
@@ -513,6 +641,11 @@ export const App: React.FC = () => {
                 geminiConfigured={geminiConfigured}
                 onGeminiKeyChanged={setGeminiConfigured}
                 settings={settings}
+                updateInfo={updateInfo}
+                checkingUpdate={checkingUpdate}
+                applyingUpdate={applyingUpdate}
+                onCheckForUpdates={handleCheckForUpdates}
+                onApplyUpdate={handleApplyUpdate}
                 onUpdateSettings={async (patch) => {
                   try {
                     const updated = await sendExtensionMessage('SETTINGS_UPDATE', patch);

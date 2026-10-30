@@ -1,4 +1,5 @@
 import { normalizeProviderUrls } from '../../domain/custom-provider';
+import { getCurrentAppVersion } from '../../domain/version';
 import {
   Skill,
   CreateSkillInput,
@@ -14,19 +15,19 @@ import { SEED_SKILLS } from './seed-data';
 export const TRASH_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 export interface StorageBackend {
-  get(keys: string | string[]): Promise<Record<string, any>>;
-  set(items: Record<string, any>): Promise<void>;
+  get(keys: string | string[]): Promise<Record<string, unknown>>;
+  set(items: Record<string, unknown>): Promise<void>;
   remove(keys: string | string[]): Promise<void>;
   clear?(): Promise<void>;
 }
 
 class ChromeStorageBackend implements StorageBackend {
-  async get(keys: string | string[]): Promise<Record<string, any>> {
+  async get(keys: string | string[]): Promise<Record<string, unknown>> {
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
       return chrome.storage.local.get(keys);
     }
     // Fallback for tests or web environment
-    const result: Record<string, any> = {};
+    const result: Record<string, unknown> = {};
     const keyArray = Array.isArray(keys) ? keys : [keys];
     for (const k of keyArray) {
       const val = localStorage.getItem(`sv:${k}`);
@@ -41,7 +42,7 @@ class ChromeStorageBackend implements StorageBackend {
     return result;
   }
 
-  async set(items: Record<string, any>): Promise<void> {
+  async set(items: Record<string, unknown>): Promise<void> {
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
       return chrome.storage.local.set(items);
     }
@@ -77,14 +78,23 @@ export class SkillRepository {
   }
 
   /**
-   * Initializes the repository, seeding default skills if empty.
+   * Initializes the repository, seeding default skills if empty,
+   * or safely performing version migration and pre-update snapshots.
    */
   async init(): Promise<void> {
-    const meta = await this.backend.get(['meta:schemaVersion', 'skill:index']);
+    const currentAppVersion = getCurrentAppVersion();
+    const meta = await this.backend.get([
+      'meta:schemaVersion',
+      'skill:index',
+      'meta:appVersion',
+      'settings',
+    ]);
+
     if (!meta['meta:schemaVersion'] || !meta['skill:index']) {
       // Seed initial skills
-      const itemsToSet: Record<string, any> = {
+      const itemsToSet: Record<string, unknown> = {
         'meta:schemaVersion': CURRENT_SCHEMA_VERSION,
+        'meta:appVersion': currentAppVersion,
         settings: DEFAULT_SETTINGS,
       };
       const index: string[] = [];
@@ -96,7 +106,74 @@ export class SkillRepository {
       itemsToSet['skill:index'] = index;
 
       await this.backend.set(itemsToSet);
+      return;
     }
+
+    // Safely snapshot state and migrate new settings if the app version was upgraded
+    const storedAppVersion = meta['meta:appVersion'] as string | undefined;
+    if (!storedAppVersion || storedAppVersion !== currentAppVersion) {
+      await this.createSafetyBackup(
+        `auto-upgrade-${storedAppVersion || 'initial'}-to-${currentAppVersion}`
+      );
+
+      const existingSettings = (meta['settings'] as Partial<SkillVaultSettings>) || {};
+      const mergedSettings: SkillVaultSettings = {
+        ...DEFAULT_SETTINGS,
+        ...existingSettings,
+      };
+
+      await this.backend.set({
+        'meta:appVersion': currentAppVersion,
+        settings: mergedSettings,
+      });
+    }
+  }
+
+  /**
+   * Creates a timestamped safety backup in storage to prevent data loss across updates.
+   *
+   * @param reason - A label describing the trigger for this safety backup (e.g. "pre-update").
+   * @returns Backup summary containing the key, timestamp, and number of preserved skills.
+   */
+  async createSafetyBackup(
+    reason = 'manual'
+  ): Promise<{ backupKey: string; skillCount: number; timestamp: number }> {
+    const skills = await this.list();
+    const settings = await this.getSettings();
+    const trash = await this.listTrash();
+    const timestamp = Date.now();
+    const backupKey = `backup:${reason}-${timestamp}`;
+    const backupData = {
+      backupKey,
+      reason,
+      timestamp,
+      createdAt: new Date(timestamp).toISOString(),
+      appVersion: getCurrentAppVersion(),
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      skills,
+      settings,
+      trash,
+    };
+    await this.backend.set({ [backupKey]: backupData });
+    return {
+      backupKey,
+      skillCount: skills.length,
+      timestamp,
+    };
+  }
+
+  /**
+   * Retrieves the active app version and any previously stored version from metadata.
+   *
+   * @returns Object containing the active version and stored version string if available.
+   */
+  async getAppVersionInfo(): Promise<{ currentVersion: string; storedVersion?: string }> {
+    const data = await this.backend.get('meta:appVersion');
+    return {
+      currentVersion: getCurrentAppVersion(),
+      storedVersion:
+        typeof data['meta:appVersion'] === 'string' ? data['meta:appVersion'] : undefined,
+    };
   }
 
   /**
@@ -104,7 +181,7 @@ export class SkillRepository {
    */
   async list(): Promise<Skill[]> {
     const indexData = await this.backend.get('skill:index');
-    const index: string[] = indexData['skill:index'] || [];
+    const index: string[] = (indexData['skill:index'] as string[] | undefined) || [];
     if (index.length === 0) {
       return [];
     }
@@ -158,7 +235,7 @@ export class SkillRepository {
 
     const skill = createSkillEntity(input);
     const indexData = await this.backend.get('skill:index');
-    const index: string[] = indexData['skill:index'] || [];
+    const index: string[] = (indexData['skill:index'] as string[] | undefined) || [];
 
     index.unshift(skill.id);
 
@@ -218,8 +295,8 @@ export class SkillRepository {
     const skill = await this.get(id);
     if (!skill) return;
     const data = await this.backend.get(['skill:index', 'skill:trash']);
-    const index: string[] = data['skill:index'] || [];
-    const trash: TrashedSkill[] = data['skill:trash'] || [];
+    const index: string[] = (data['skill:index'] as string[] | undefined) || [];
+    const trash: TrashedSkill[] = (data['skill:trash'] as TrashedSkill[] | undefined) || [];
     const deletedAt = Date.now();
 
     // Save the recoverable copy and remove the active content in the same storage write.
@@ -235,7 +312,7 @@ export class SkillRepository {
 
   async purgeExpiredTrash(): Promise<TrashedSkill[]> {
     const data = await this.backend.get('skill:trash');
-    const trash: TrashedSkill[] = data['skill:trash'] || [];
+    const trash: TrashedSkill[] = (data['skill:trash'] as TrashedSkill[] | undefined) || [];
     const now = Date.now();
     const remaining = trash.filter((entry) => entry.expiresAt > now);
     if (remaining.length !== trash.length) {
@@ -264,7 +341,7 @@ export class SkillRepository {
       skill.shortcut = undefined;
     }
     const data = await this.backend.get('skill:index');
-    const index: string[] = data['skill:index'] || [];
+    const index: string[] = (data['skill:index'] as string[] | undefined) || [];
     await this.backend.set({
       [`skill:${id}`]: skill,
       'skill:index': [id, ...index.filter((item) => item !== id)],
@@ -368,7 +445,7 @@ export class SkillRepository {
     const data = await this.backend.get('settings');
     return {
       ...DEFAULT_SETTINGS,
-      ...(data['settings'] || {}),
+      ...((data['settings'] as Partial<SkillVaultSettings> | undefined) || {}),
     };
   }
 
@@ -423,19 +500,22 @@ export class SkillRepository {
     const errors: string[] = [];
     let imported = 0;
 
-    let parsed: any;
+    let parsed: unknown;
     try {
       parsed = JSON.parse(jsonStr);
     } catch {
       throw new Error('Invalid JSON format');
     }
 
-    const skillsToImport: any[] = Array.isArray(parsed) ? parsed : parsed.skills;
+    const skillsToImport: unknown = Array.isArray(parsed)
+      ? parsed
+      : (parsed as { skills?: unknown } | null)?.skills;
     if (!Array.isArray(skillsToImport)) {
       throw new Error('JSON backup missing skills array');
     }
 
-    for (const item of skillsToImport) {
+    for (const rawItem of skillsToImport) {
+      const item = rawItem as CreateSkillInput;
       try {
         const validation = validateSkill(item);
         if (!validation.valid) {
@@ -444,15 +524,17 @@ export class SkillRepository {
         }
 
         // Check if skill with same ID or same shortcut exists
-        const existing = await this.get(item.id);
+        const existing = item.id ? await this.get(item.id) : null;
         if (existing) {
-          await this.update(item.id, item);
+          await this.update(existing.id, item);
         } else {
           await this.create(item);
         }
         imported++;
-      } catch (err: any) {
-        errors.push(`Skill "${item.name || 'unnamed'}": ${err.message}`);
+      } catch (err: unknown) {
+        errors.push(
+          `Skill "${item.name || 'unnamed'}": ${err instanceof Error ? err.message : 'Import failed'}`
+        );
       }
     }
 

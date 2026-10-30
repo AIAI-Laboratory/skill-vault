@@ -104,7 +104,7 @@ After updating an unpacked extension, reload it at `chrome://extensions` before 
    ```text
    /skill review
    ```
-4. Use <kbd>↑</kbd> and <kbd>↓</kbd> to navigate, and press <kbd>Enter</kbd> to insert the skill prompt directly into the composer.
+4. Use <kbd>↑</kbd> and <kbd>↓</kbd> to navigate, and press <kbd>Enter</kbd> to insert a skill label such as `🏷️ /𝚛𝚎𝚟𝚒𝚎𝚠`. ASCII letters and digits use Unicode monospace characters while preserving case. The label expands to the original prompt when you send the message.
 
 ### 3. Save Text from Any Webpage
 
@@ -140,3 +140,17 @@ npm run build
 # Package extension into zip archive
 npm run package
 ```
+
+## Contributing
+
+Read the [contribution workflow](CONTRIBUTING.md) before starting work. Create a separate branch such as `feat/skill-folders` or `fix/gemini-line-breaks`, run the applicable checks, and open a pull request against `main`.
+
+Follow the [commit message guidelines](docs/commit-message-guidelines.md) when creating commits or squash messages. The guide adapts Angular's format to Skill Vault's project areas.
+
+Enable the shared commit template once per clone:
+
+```bash
+npm run setup:commits
+```
+
+Then use `git commit` to write a message with the template in your editor.

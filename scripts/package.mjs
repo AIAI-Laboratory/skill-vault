@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { readReleaseVersion, validateReleaseVersion } from './release-version.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
@@ -9,9 +10,10 @@ const distDir = path.join(rootDir, 'dist');
 const packageJsonPath = path.join(rootDir, 'package.json');
 
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-const rawVersion =
-  process.env.RELEASE_VERSION || process.env.GITHUB_REF_NAME || `v${packageJson.version}`;
-const cleanVersion = rawVersion.startsWith('v') ? rawVersion : `v${rawVersion}`;
+const cleanVersion = readReleaseVersion(
+  new URL('../', import.meta.url),
+  process.env.RELEASE_VERSION
+);
 
 if (!fs.existsSync(distDir) || !fs.existsSync(path.join(distDir, 'manifest.json'))) {
   console.error(
@@ -19,6 +21,9 @@ if (!fs.existsSync(distDir) || !fs.existsSync(path.join(distDir, 'manifest.json'
   );
   process.exit(1);
 }
+
+const manifest = JSON.parse(fs.readFileSync(path.join(distDir, 'manifest.json'), 'utf8'));
+validateReleaseVersion(packageJson.version, manifest.version, cleanVersion);
 
 const versionedZipName = `skill-vault-${cleanVersion}.zip`;
 const latestZipName = 'skill-vault.zip';

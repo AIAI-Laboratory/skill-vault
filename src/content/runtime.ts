@@ -1,6 +1,7 @@
 import { AdapterRegistry } from '../adapters/registry';
 import { AIAdapter, ComposerHandle, TextRange } from '../adapters/types';
 import { PageContext, Skill, SkillVaultSettings } from '../domain/types';
+import { toMathematicalMonospace } from '../domain/monospace';
 import { fillUserInput, hasUserInputSlot, renderPromptTemplate } from '../domain/variable';
 import { sendExtensionMessage } from '../infrastructure/messaging/client';
 import {
@@ -283,6 +284,12 @@ export class ContentRuntime {
     }
   }
 
+  /**
+   * Inserts a selected skill's Unicode monospace label followed by a newline into the
+   * active composer and registers its rendered prompt for expansion on submission.
+   *
+   * @param skill - The skill chosen from the slash command palette.
+   */
   private async handleSkillSelected(skill: Skill) {
     if (!this.activeAdapter || !this.currentComposer) return;
 
@@ -307,14 +314,24 @@ export class ContentRuntime {
     };
 
     const rendered = renderPromptTemplate(skill.content, {}, context);
-    const label = skill.shortcut ? `🏷️ /${skill.shortcut}` : `🏷️ ${skill.name}`;
+    // Store the displayed Unicode label so expansion uses the same text and UTF-16 offsets.
+    const label = toMathematicalMonospace(
+      skill.shortcut ? `🏷️ /${skill.shortcut}` : `🏷️ ${skill.name}`,
+      true
+    );
     this.skillLabels.set(label, rendered);
 
     try {
-      await this.activeAdapter.insertText(label, targetRange || undefined, 'highlight');
+      await this.activeAdapter.insertText(`${label}\n`, targetRange || undefined, 'highlight');
       // Record usage asynchronously
-      sendExtensionMessage('SKILL_RECORD_USAGE', { id: skill.id }).catch((error) =>
-        this.stopIfExtensionContextInvalidated(error)
+      sendExtensionMessage('SKILL_RECORD_USAGE', { id: skill.id }).catch(
+        /**
+         * Disposes the runtime when usage recording fails due to extension context invalidation.
+         *
+         * @param error - Rejection reason from the extension messaging layer.
+         * @returns True if the runtime was disposed due to context invalidation, otherwise false.
+         */
+        (error) => this.stopIfExtensionContextInvalidated(error)
       );
     } catch (err) {
       if (this.stopIfExtensionContextInvalidated(err)) return;

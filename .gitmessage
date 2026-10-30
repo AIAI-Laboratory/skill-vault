@@ -1,0 +1,17 @@
+# <type>(<scope>): <summary>
+#
+# Explain why the change is needed and how behavior changes.
+# Body: at least 20 characters; optional for docs.
+#
+# Optional footer:
+# Fixes #<issue>
+#
+# BREAKING CHANGE: <summary>
+#
+# Explain the impact and migration steps.
+#
+# Types: build, ci, docs, feat, fix, perf, refactor, test
+# Reverts: revert: <original header>; include the SHA and reason in the body.
+# Scope: choose a project area, or omit for changes spanning several areas.
+# Summary: English, imperative, lowercase initial, no final period.
+# Full guide: docs/commit-message-guidelines.md

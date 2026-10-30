@@ -5,49 +5,124 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  merge_group:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build-and-test:
-    name: Build & Test (Node ${{ matrix.node-version }})
+  code-quality:
+    name: Code Quality
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        node-version: [20.x, 22.x]
-
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check formatting
+        run: npm run format:check
+      - name: Lint without warnings
+        if: ${{ !cancelled() }}
+        run: npm run lint
+      - name: Typecheck
+        if: ${{ !cancelled() }}
+        run: npm run typecheck
 
+  build-and-test:
+    name: Build & Test (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20.x, 22.x]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'npm'
-
+          cache: npm
       - name: Install dependencies
         run: npm ci
-
-      - name: Check formatting
-        run: npm run format:check
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Typecheck
-        run: npm run typecheck
-
       - name: Run unit tests
+        if: matrix.node-version == '20.x'
         run: npm test
-
+      - name: Run unit tests with coverage thresholds
+        if: matrix.node-version == '22.x'
+        run: npm run test:coverage
+      - name: Show coverage in check summary
+        if: ${{ !cancelled() && matrix.node-version == '22.x' && hashFiles('coverage/coverage-summary.json') != '' }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const { total } = JSON.parse(readFileSync('coverage/coverage-summary.json', 'utf8'));
+          const thresholds = { statements: 45, branches: 70, functions: 60, lines: 45 };
+          const rows = Object.entries(thresholds).map(([metric, minimum]) => {
+            const value = total[metric];
+            return `| ${metric} | ${value.pct}% | ${value.covered}/${value.total} | ${minimum}% |`;
+          });
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, [
+            '## Test coverage', '',
+            '| Metric | Coverage | Covered / Total | Minimum |',
+            '| --- | ---: | ---: | ---: |', ...rows, '',
+            'Download the coverage-report artifact to view the HTML report.', '',
+          ].join('\n'));
+          NODE
+      - name: Upload coverage summary
+        if: ${{ !cancelled() && matrix.node-version == '22.x' && hashFiles('coverage/coverage-summary.json') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-summary
+          path: coverage/coverage-summary.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload coverage report
+        if: ${{ !cancelled() && matrix.node-version == '22.x' && hashFiles('coverage/coverage-summary.json') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: coverage/
+          if-no-files-found: error
+          retention-days: 14
       - name: Build extension
         run: npm run build
-
       - name: Upload build artifact
         if: matrix.node-version == '22.x'
         uses: actions/upload-artifact@v7
         with:
           name: skill-vault-dist
           path: dist/
+          if-no-files-found: error
           retention-days: 14
+
+  quality-gate:
+    name: Quality Gate
+    if: ${{ always() }}
+    needs: [code-quality, build-and-test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every check to succeed
+        env:
+          CHECK_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node --input-type=module <<'NODE'
+          const checks = JSON.parse(process.env.CHECK_RESULTS);
+          for (const [name, check] of Object.entries(checks)) {
+            console.log(`${name}: ${check.result}`);
+            if (check.result !== 'success') process.exitCode = 1;
+          }
+          NODE

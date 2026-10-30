@@ -7,7 +7,7 @@ import {
   ComposerChangeCallback,
   DisposeFunction,
 } from './types';
-import { formatInsertedText, InsertedTextStyle } from './format-inserted-text';
+import { InsertedTextStyle } from './format-inserted-text';
 
 export class GenericAdapter implements AIAdapter {
   readonly id = 'generic';
@@ -100,7 +100,19 @@ export class GenericAdapter implements AIAdapter {
     }
   }
 
-  async insertText(text: string, slashRange?: TextRange, style?: InsertedTextStyle): Promise<void> {
+  /**
+   * Inserts text into the active generic composer, replacing an optional slash command
+   * range and converting trailing newlines into paragraph breaks in contenteditable editors.
+   *
+   * @param text - Text content to insert into the composer.
+   * @param slashRange - Optional character range of the trigger command to replace.
+   * @param _style - Optional inline formatting style hint; ignored for contenteditable stability.
+   */
+  async insertText(
+    text: string,
+    slashRange?: TextRange,
+    _style?: InsertedTextStyle
+  ): Promise<void> {
     const handle = this.findComposer();
     if (!handle) return;
 
@@ -117,24 +129,32 @@ export class GenericAdapter implements AIAdapter {
       return;
     }
 
+    const trailingNewlines = text.match(/\n+$/)?.[0].length || 0;
+    const contentToInsert = trailingNewlines > 0 ? text.slice(0, -trailingNewlines) : text;
+
     if (slashRange) {
       this.selectRange(handle.element, slashRange.start, slashRange.end);
+    }
+
+    // Try direct execCommand insertText first
+    let success = document.execCommand('insertText', false, contentToInsert);
+    if (!success && slashRange) {
       document.execCommand('delete');
+      success = document.execCommand('insertText', false, contentToInsert);
     }
-
-    // Try execCommand first
-    const success = document.execCommand('insertText', false, text);
     if (!success) {
-      handle.element.textContent = text;
-      handle.element.dispatchEvent(new Event('input', { bubbles: true }));
+      handle.element.textContent = contentToInsert;
     }
 
-    if (style && slashRange) {
-      const start = success ? slashRange.start : 0;
-      this.selectRange(handle.element, start, start + text.length);
-      formatInsertedText(style);
-      handle.element.dispatchEvent(new Event('input', { bubbles: true }));
+    if (trailingNewlines > 0) {
+      for (let i = 0; i < trailingNewlines; i++) {
+        if (!document.execCommand('insertParagraph')) {
+          document.execCommand('insertLineBreak');
+        }
+      }
     }
+
+    handle.element.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
   private selectRange(root: Node, start: number, end: number) {
@@ -180,7 +200,7 @@ export class GenericAdapter implements AIAdapter {
 
   observeComposer(callback: ComposerChangeCallback): DisposeFunction {
     let lastEl = this.findComposer()?.element;
-    let timer: any = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
     const check = () => {
       const current = this.findComposer();

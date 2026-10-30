@@ -7,7 +7,7 @@ import prettierConfig from 'eslint-config-prettier';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'node_modules/**', 'public/**'],
+    ignores: ['dist/**', 'node_modules/**', 'public/**', 'coverage/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -36,7 +36,27 @@ export default tseslint.config(
           varsIgnorePattern: '^_',
         },
       ],
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
+    },
+  },
+  {
+    files: ['src/components/ui/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': [
+        'warn',
+        {
+          allowConstantExport: true,
+          allowExportNames: [
+            'badgeVariants',
+            'buttonVariants',
+            'tabsListVariants',
+            'toggleVariants',
+            'createToastManager',
+            'toast',
+            'useToastManager',
+          ],
+        },
+      ],
     },
   },
   {

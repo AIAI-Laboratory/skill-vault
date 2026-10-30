@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readReleaseVersion } from './release-version.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
@@ -26,6 +27,7 @@ async function copyDir(src, dest) {
 }
 
 async function runBuild() {
+  readReleaseVersion(new URL('../', import.meta.url), process.env.RELEASE_VERSION);
   console.log('Building Skill Vault Chrome Extension...');
 
   // 1. Build Side Panel (React SPA)
