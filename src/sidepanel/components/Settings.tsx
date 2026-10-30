@@ -1,11 +1,23 @@
 import { GeminiKeySettings } from './GeminiKeySettings';
 import { normalizeProviderUrl, providerMatchPattern } from '../../domain/custom-provider';
+import { getCurrentAppVersionName } from '../../domain/version';
 import { Input } from '@/components/ui/input';
 import { useRef, useState } from 'react';
-import { Plus, Trash2, Download, Upload } from 'lucide-react';
-import { SkillVaultSettings } from '../../domain/types';
+import {
+  Plus,
+  Trash2,
+  Download,
+  Upload,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
+  ArrowUpCircle,
+  ExternalLink,
+} from 'lucide-react';
+import { SkillVaultSettings, UpdateInfo } from '../../domain/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import {
   Field,
   FieldError,
@@ -26,6 +38,11 @@ interface SettingsProps {
   onUpdateSettings: (patch: Partial<SkillVaultSettings>) => Promise<void>;
   onExport: () => void;
   onImport: (file: File) => Promise<void>;
+  updateInfo?: UpdateInfo | null;
+  checkingUpdate?: boolean;
+  applyingUpdate?: boolean;
+  onCheckForUpdates?: () => Promise<void>;
+  onApplyUpdate?: () => Promise<void>;
 }
 
 const providers = [
@@ -34,6 +51,13 @@ const providers = [
   { key: 'enableGemini', name: 'Gemini' },
 ] as const;
 
+/**
+ * Settings view allowing users to configure AI providers, customize themes,
+ * manage vault backups, and check or install application updates.
+ *
+ * @param props - Component properties for managing configuration and updates.
+ * @returns Rendered settings view.
+ */
 export function Settings({
   geminiConfigured,
   onGeminiKeyChanged,
@@ -41,6 +65,11 @@ export function Settings({
   onUpdateSettings,
   onExport,
   onImport,
+  updateInfo,
+  checkingUpdate = false,
+  applyingUpdate = false,
+  onCheckForUpdates,
+  onApplyUpdate,
 }: SettingsProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [importing, setImporting] = useState(false);
@@ -299,6 +328,118 @@ export function Settings({
               }
             }}
           />
+        </CardContent>
+      </Card>
+      <Card size="sm">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base font-semibold">Version & Updates</CardTitle>
+          <Badge variant="outline" className="font-mono text-xs">
+            {getCurrentAppVersionName()}
+          </Badge>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2 rounded-lg bg-muted p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Status</span>
+              {checkingUpdate ? (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Spinner className="size-3" />
+                  <span>Checking...</span>
+                </div>
+              ) : updateInfo?.hasUpdate ? (
+                <Badge variant="default" className="text-xs">
+                  Update available
+                </Badge>
+              ) : updateInfo?.status === 'up_to_date' ? (
+                <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 className="size-3.5" />
+                  <span>Up to date</span>
+                </div>
+              ) : updateInfo?.status === 'error' ? (
+                <div className="flex items-center gap-1.5 text-xs text-destructive">
+                  <AlertCircle className="size-3.5" />
+                  <span>Check failed</span>
+                </div>
+              ) : (
+                <span className="text-xs text-muted-foreground">Ready</span>
+              )}
+            </div>
+
+            {updateInfo?.lastCheckedAt ? (
+              <p className="text-xs text-muted-foreground">
+                Last checked: {new Date(updateInfo.lastCheckedAt).toLocaleTimeString()}
+              </p>
+            ) : null}
+
+            {updateInfo?.hasUpdate && updateInfo.latestVersion && (
+              <div className="mt-2 flex flex-col gap-2 border-t border-border/50 pt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-foreground">
+                    {updateInfo.releaseName || `Skill Vault v${updateInfo.latestVersion}`}
+                  </span>
+                  <Badge variant="secondary" className="font-mono text-[10px]">
+                    v{updateInfo.latestVersion}
+                  </Badge>
+                </div>
+
+                {updateInfo.releaseNotes && (
+                  <div className="max-h-32 overflow-y-auto rounded bg-background/50 p-2 font-sans text-xs whitespace-pre-wrap text-muted-foreground">
+                    {updateInfo.releaseNotes}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    className="flex-1"
+                    disabled={applyingUpdate}
+                    onClick={() => void onApplyUpdate?.()}
+                  >
+                    {applyingUpdate ? (
+                      <Spinner data-icon="inline-start" />
+                    ) : (
+                      <ArrowUpCircle data-icon="inline-start" />
+                    )}
+                    Update now
+                  </Button>
+                  {updateInfo.htmlUrl && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        window.open(updateInfo.htmlUrl, '_blank', 'noopener,noreferrer')
+                      }
+                    >
+                      <ExternalLink data-icon="inline-start" />
+                      Release notes
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <Field orientation="horizontal" className="items-center rounded-lg bg-muted px-3 py-2.5">
+            <FieldLabel htmlFor="auto-check-updates">Automatically check for updates</FieldLabel>
+            <Switch
+              id="auto-check-updates"
+              checked={settings.autoCheckUpdates}
+              onCheckedChange={(checked) => void onUpdateSettings({ autoCheckUpdates: checked })}
+            />
+          </Field>
+
+          <Button
+            variant="outline"
+            disabled={checkingUpdate}
+            onClick={() => void onCheckForUpdates?.()}
+          >
+            {checkingUpdate ? (
+              <Spinner data-icon="inline-start" />
+            ) : (
+              <RefreshCw data-icon="inline-start" />
+            )}
+            {checkingUpdate ? 'Checking for updates…' : 'Check for updates'}
+          </Button>
         </CardContent>
       </Card>
     </div>

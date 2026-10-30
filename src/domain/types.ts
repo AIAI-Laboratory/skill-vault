@@ -62,6 +62,7 @@ export interface SkillVaultSettings {
   enableClaude: boolean;
   enableGemini: boolean;
   enableDirectShortcuts: boolean;
+  autoCheckUpdates: boolean;
   theme: 'dark' | 'light' | 'system';
 }
 
@@ -72,8 +73,28 @@ export const DEFAULT_SETTINGS: SkillVaultSettings = {
   enableClaude: true,
   enableGemini: true,
   enableDirectShortcuts: false,
+  autoCheckUpdates: true,
   theme: 'dark',
 };
+
+/** Status representation of the update checking lifecycle. */
+export type UpdateCheckStatus =
+  'idle' | 'checking' | 'available' | 'up_to_date' | 'ready_to_install' | 'error';
+
+/** Information describing the current update status and prospective releases. */
+export interface UpdateInfo {
+  currentVersion: string;
+  latestVersion?: string;
+  hasUpdate: boolean;
+  releaseName?: string;
+  releaseNotes?: string;
+  publishedAt?: string;
+  downloadUrl?: string;
+  htmlUrl?: string;
+  lastCheckedAt: number;
+  status: UpdateCheckStatus;
+  errorMessage?: string;
+}
 
 export interface PageContext {
   url: string;

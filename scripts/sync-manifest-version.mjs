@@ -13,3 +13,12 @@ fs.writeFileSync(
   manifestPath,
   source.replace(/("version"\s*:\s*)"[^"]*"/, `$1"${manifest.version}"`)
 );
+
+const domainVersionPath = new URL('src/domain/version.ts', root);
+if (fs.existsSync(domainVersionPath)) {
+  const domainSrc = fs.readFileSync(domainVersionPath, 'utf8');
+  fs.writeFileSync(
+    domainVersionPath,
+    domainSrc.replace(/(APP_VERSION\s*=\s*)'[^']*'/, `$1'${version}'`)
+  );
+}
