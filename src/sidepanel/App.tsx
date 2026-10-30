@@ -334,6 +334,12 @@ export const App: React.FC = () => {
     setDraftSkill(null);
   };
 
+  const cancelEditing = async () => {
+    setIsEditing(false);
+    setEditingSkill(null);
+    if (draftSkill) await handleDismissDraft();
+  };
+
   // Export JSON backup
   const handleExport = () => {
     const exportData = {
@@ -453,7 +459,18 @@ export const App: React.FC = () => {
                 </Badge>
               </div>
             </button>
-            {!isEditing && (
+            {isEditing ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="rounded-full"
+                aria-label="Close editor"
+                onClick={cancelEditing}
+              >
+                <X />
+              </Button>
+            ) : (
               <Button onClick={createSkill}>
                 <Plus data-icon="inline-start" />
                 New skill
@@ -520,11 +537,7 @@ export const App: React.FC = () => {
                 await handleSaveSkill(data, id);
                 if (draftSkill) await handleDismissDraft();
               }}
-              onCancel={async () => {
-                setIsEditing(false);
-                setEditingSkill(null);
-                if (draftSkill) await handleDismissDraft();
-              }}
+              onCancel={cancelEditing}
             />
           </main>
         ) : (

@@ -11,6 +11,7 @@ import type { DraftSkill } from '../../domain/types';
 
 /** Sent from the background to a tab's content script when "Fill selection into Skill" is clicked. */
 export const FILL_SELECTION_MESSAGE = 'SV_FILL_SELECTION';
+export const SKILL_DRAG_TYPE = 'application/x-skill-vault-skill-id';
 
 export interface FillSelectionMessage {
   type: typeof FILL_SELECTION_MESSAGE;

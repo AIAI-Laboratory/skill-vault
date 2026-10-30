@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Save, ArrowLeft, Wand2, FileText, AlertCircle } from 'lucide-react';
+import { Save, Wand2, FileText, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -196,17 +196,6 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
       onChange={() => setFormatPreview(null)}
     >
       <div className="flex flex-col gap-4">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="w-fit"
-          onClick={onCancel}
-          disabled={saving}
-        >
-          <ArrowLeft data-icon="inline-start" />
-          Back to vault
-        </Button>
         <h1 className="text-2xl font-semibold tracking-tight">
           {initialSkill ? 'Edit skill' : 'New skill'}
         </h1>
