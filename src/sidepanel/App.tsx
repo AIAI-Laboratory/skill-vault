@@ -8,6 +8,7 @@ import {
   BookOpen,
   Sparkles,
   ArrowUpCircle,
+  Download,
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -150,14 +151,18 @@ export const App: React.FC = () => {
   };
 
   /**
-   * Triggers an update check against remote releases.
+   * Triggers an update check against the active update source.
    */
   const handleCheckForUpdates = async () => {
     setCheckingUpdate(true);
     try {
       const status = await sendExtensionMessage('CHECK_FOR_UPDATES');
       setUpdateInfo(status);
-      if (status.hasUpdate) {
+      if (status.status === 'ready_to_install') {
+        showToast(`Version v${status.latestVersion} is ready to install!`);
+      } else if (status.status === 'downloading') {
+        showToast(`Downloading version v${status.latestVersion} from Chrome Web Store…`);
+      } else if (status.hasUpdate) {
         showToast(`Version v${status.latestVersion} is available!`);
       } else if (status.status === 'up_to_date') {
         showToast("You're on the latest version.");
@@ -172,7 +177,8 @@ export const App: React.FC = () => {
   };
 
   /**
-   * Initiates the update process, creating a safety snapshot and reloading the extension.
+   * Initiates the update process, creating a safety snapshot and either reloading a staged
+   * Chrome Web Store update or opening the manual release download link.
    */
   const handleApplyUpdate = async () => {
     setApplyingUpdate(true);
@@ -548,8 +554,11 @@ export const App: React.FC = () => {
                 <div className="flex flex-1 flex-col gap-1.5">
                   <div className="flex items-center justify-between">
                     <AlertTitle className="text-sm font-semibold text-foreground">
-                      Version {updateInfo.latestVersion ? `v${updateInfo.latestVersion}` : ''}{' '}
-                      available
+                      {updateInfo.status === 'ready_to_install'
+                        ? `Version ${updateInfo.latestVersion ? `v${updateInfo.latestVersion} ` : ''}ready to install`
+                        : updateInfo.status === 'downloading'
+                          ? `Downloading version ${updateInfo.latestVersion ? `v${updateInfo.latestVersion}` : ''}`
+                          : `Version ${updateInfo.latestVersion ? `v${updateInfo.latestVersion} ` : ''}available`}
                     </AlertTitle>
                     <Button
                       variant="ghost"
@@ -562,26 +571,54 @@ export const App: React.FC = () => {
                   </div>
                   <AlertDescription className="text-xs text-muted-foreground">
                     <p className="line-clamp-2">
-                      {updateInfo.releaseName || 'A new release is available with improvements.'}
+                      {updateInfo.status === 'downloading'
+                        ? 'Chrome is downloading this update from the Chrome Web Store. It will be ready to install shortly.'
+                        : updateInfo.releaseName || 'A new release is available with improvements.'}
                     </p>
                     <div className="mt-2.5 flex items-center gap-2">
-                      <Button
-                        size="xs"
-                        onClick={() => void handleApplyUpdate()}
-                        disabled={applyingUpdate}
-                        className="h-7 text-xs"
-                      >
-                        {applyingUpdate ? (
-                          <Spinner data-icon="inline-start" />
-                        ) : (
-                          <ArrowUpCircle data-icon="inline-start" />
-                        )}
-                        Update now
-                      </Button>
+                      {updateInfo.status === 'ready_to_install' && (
+                        <Button
+                          size="xs"
+                          onClick={
+                            /** Triggers applying the staged Chrome Web Store update. */
+                            () => void handleApplyUpdate()
+                          }
+                          disabled={applyingUpdate}
+                          className="h-7 text-xs"
+                        >
+                          {applyingUpdate ? (
+                            <Spinner data-icon="inline-start" />
+                          ) : (
+                            <ArrowUpCircle data-icon="inline-start" />
+                          )}
+                          Update now
+                        </Button>
+                      )}
+                      {updateInfo.status === 'available' && (
+                        <Button
+                          size="xs"
+                          onClick={
+                            /** Saves a safety backup and opens the manual release download link. */
+                            () => void handleApplyUpdate()
+                          }
+                          disabled={applyingUpdate}
+                          className="h-7 text-xs"
+                        >
+                          {applyingUpdate ? (
+                            <Spinner data-icon="inline-start" />
+                          ) : (
+                            <Download data-icon="inline-start" />
+                          )}
+                          Download update
+                        </Button>
+                      )}
                       <Button
                         size="xs"
                         variant="outline"
-                        onClick={() => setActiveTab('settings')}
+                        onClick={
+                          /** Navigates to the Settings tab to view update details. */
+                          () => setActiveTab('settings')
+                        }
                         className="h-7 text-xs"
                       >
                         View details

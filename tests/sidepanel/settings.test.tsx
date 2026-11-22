@@ -103,13 +103,69 @@ describe('Settings Version and Updates UI', () => {
     expect(container.textContent).toContain('Checking for updates…');
   });
 
-  /** Tests displaying update available details and triggering apply update. */
-  it('shows release notes and update now button when update is available', async () => {
+  /** Tests displaying ready_to_install details and triggering apply update. */
+  it('shows Ready to install badge and Update now button when update is staged', async () => {
     const onApplyUpdate = vi.fn().mockResolvedValue(undefined);
     const updateInfo: UpdateInfo = {
       currentVersion: '0.1.4',
       latestVersion: '0.2.0',
       hasUpdate: true,
+      source: 'chrome_web_store',
+      releaseName: 'Skill Vault v0.2.0 Release',
+      releaseNotes: 'Key improvements and auto updater support.',
+      htmlUrl: 'https://example.com/release',
+      lastCheckedAt: Date.now(),
+      status: 'ready_to_install',
+    };
+
+    await renderSettings({ updateInfo, onApplyUpdate });
+
+    expect(container.textContent).toContain('Ready to install');
+    expect(container.textContent).toContain('Skill Vault v0.2.0 Release');
+    expect(container.textContent).toContain('Key improvements and auto updater support.');
+
+    const updateBtn = findButton('Update now');
+    expect(updateBtn).toBeDefined();
+
+    await act(
+      /** Clicks the Update now button. */
+      async () => {
+        updateBtn?.click();
+      }
+    );
+
+    expect(onApplyUpdate).toHaveBeenCalled();
+  });
+
+  /** Tests displaying downloading state for Chrome Web Store updates in progress. */
+  it('shows Downloading indicator and disabled button when store update is downloading', async () => {
+    const updateInfo: UpdateInfo = {
+      currentVersion: '0.1.4',
+      latestVersion: '0.2.0',
+      hasUpdate: true,
+      source: 'chrome_web_store',
+      releaseName: 'Skill Vault v0.2.0 Release',
+      lastCheckedAt: Date.now(),
+      status: 'downloading',
+    };
+
+    await renderSettings({ updateInfo });
+
+    expect(container.textContent).toContain('Downloading…');
+    expect(container.textContent).toContain('Chrome is downloading this update');
+    const downloadingBtn = findButton('Downloading update…');
+    expect(downloadingBtn).toBeDefined();
+    expect(downloadingBtn?.disabled).toBe(true);
+  });
+
+  /** Tests displaying manual download button for GitHub/unpacked updates. */
+  it('shows Download update button when update is available from GitHub', async () => {
+    const onApplyUpdate = vi.fn().mockResolvedValue(undefined);
+    const updateInfo: UpdateInfo = {
+      currentVersion: '0.1.4',
+      latestVersion: '0.2.0',
+      hasUpdate: true,
+      source: 'github',
       releaseName: 'Skill Vault v0.2.0 Release',
       releaseNotes: 'Key improvements and auto updater support.',
       downloadUrl: 'https://example.com/download.zip',
@@ -121,15 +177,15 @@ describe('Settings Version and Updates UI', () => {
     await renderSettings({ updateInfo, onApplyUpdate });
 
     expect(container.textContent).toContain('Update available');
-    expect(container.textContent).toContain('Skill Vault v0.2.0 Release');
-    expect(container.textContent).toContain('Key improvements and auto updater support.');
+    const downloadBtn = findButton('Download update');
+    expect(downloadBtn).toBeDefined();
 
-    const updateBtn = findButton('Update now');
-    expect(updateBtn).toBeDefined();
-
-    await act(async () => {
-      updateBtn?.click();
-    });
+    await act(
+      /** Clicks the Download update button. */
+      async () => {
+        downloadBtn?.click();
+      }
+    );
 
     expect(onApplyUpdate).toHaveBeenCalled();
   });

@@ -353,6 +353,15 @@ export function Settings({
                   <Spinner className="size-3" />
                   <span>Checking...</span>
                 </div>
+              ) : updateInfo?.status === 'ready_to_install' && updateInfo.hasUpdate ? (
+                <Badge variant="default" className="text-xs">
+                  Ready to install
+                </Badge>
+              ) : updateInfo?.status === 'downloading' && updateInfo.hasUpdate ? (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Spinner className="size-3" />
+                  <span>Downloading…</span>
+                </div>
               ) : updateInfo?.hasUpdate ? (
                 <Badge variant="default" className="text-xs">
                   Update available
@@ -372,6 +381,10 @@ export function Settings({
               )}
             </div>
 
+            {updateInfo?.status === 'error' && updateInfo.errorMessage && (
+              <p className="text-xs text-destructive">{updateInfo.errorMessage}</p>
+            )}
+
             {updateInfo?.lastCheckedAt ? (
               <p className="text-xs text-muted-foreground">
                 Last checked: {new Date(updateInfo.lastCheckedAt).toLocaleTimeString()}
@@ -389,6 +402,13 @@ export function Settings({
                   </Badge>
                 </div>
 
+                {updateInfo.status === 'downloading' && (
+                  <p className="text-xs text-muted-foreground">
+                    Chrome is downloading this update from the Chrome Web Store. It will be ready to
+                    install shortly.
+                  </p>
+                )}
+
                 {updateInfo.releaseNotes && (
                   <div className="max-h-32 overflow-y-auto rounded bg-background/50 p-2 font-sans text-xs whitespace-pre-wrap text-muted-foreground">
                     {updateInfo.releaseNotes}
@@ -396,25 +416,53 @@ export function Settings({
                 )}
 
                 <div className="flex flex-wrap gap-2 pt-1">
-                  <Button
-                    size="sm"
-                    className="flex-1"
-                    disabled={applyingUpdate}
-                    onClick={() => void onApplyUpdate?.()}
-                  >
-                    {applyingUpdate ? (
+                  {updateInfo.status === 'ready_to_install' ? (
+                    <Button
+                      size="sm"
+                      className="flex-1"
+                      disabled={applyingUpdate}
+                      onClick={
+                        /** Applies the staged Chrome Web Store update. */
+                        () => void onApplyUpdate?.()
+                      }
+                    >
+                      {applyingUpdate ? (
+                        <Spinner data-icon="inline-start" />
+                      ) : (
+                        <ArrowUpCircle data-icon="inline-start" />
+                      )}
+                      Update now
+                    </Button>
+                  ) : updateInfo.status === 'downloading' ? (
+                    <Button size="sm" className="flex-1" disabled>
                       <Spinner data-icon="inline-start" />
-                    ) : (
-                      <ArrowUpCircle data-icon="inline-start" />
-                    )}
-                    Update now
-                  </Button>
+                      Downloading update…
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      className="flex-1"
+                      disabled={applyingUpdate}
+                      onClick={
+                        /** Saves a safety backup and opens the manual release download link. */
+                        () => void onApplyUpdate?.()
+                      }
+                    >
+                      {applyingUpdate ? (
+                        <Spinner data-icon="inline-start" />
+                      ) : (
+                        <Download data-icon="inline-start" />
+                      )}
+                      Download update
+                    </Button>
+                  )}
                   {updateInfo.htmlUrl && (
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() =>
-                        window.open(updateInfo.htmlUrl, '_blank', 'noopener,noreferrer')
+                      onClick={
+                        /** Opens the GitHub release notes in a new browser tab. */
+                        () => window.open(updateInfo.htmlUrl, '_blank', 'noopener,noreferrer')
                       }
                     >
                       <ExternalLink data-icon="inline-start" />

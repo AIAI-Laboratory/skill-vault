@@ -79,13 +79,17 @@ export const DEFAULT_SETTINGS: SkillVaultSettings = {
 
 /** Status representation of the update checking lifecycle. */
 export type UpdateCheckStatus =
-  'idle' | 'checking' | 'available' | 'up_to_date' | 'ready_to_install' | 'error';
+  'idle' | 'checking' | 'available' | 'downloading' | 'up_to_date' | 'ready_to_install' | 'error';
+
+/** Distribution channel used to resolve and apply extension updates. */
+export type UpdateSource = 'chrome_web_store' | 'github';
 
 /** Information describing the current update status and prospective releases. */
 export interface UpdateInfo {
   currentVersion: string;
   latestVersion?: string;
   hasUpdate: boolean;
+  source?: UpdateSource;
   releaseName?: string;
   releaseNotes?: string;
   publishedAt?: string;
