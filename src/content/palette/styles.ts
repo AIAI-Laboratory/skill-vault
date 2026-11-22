@@ -120,14 +120,16 @@ svg { display: block; width: 16px; height: 16px; flex-shrink: 0; }
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  gap: 12px;
+  gap: 10px;
   padding: 12px;
   border: 1px solid var(--sv-border);
   background: var(--sv-card);
   border-radius: 10px;
-  cursor: pointer;
+  cursor: grab;
   user-select: none;
 }
+.sv-item:active { cursor: grabbing; }
+.sv-item.dragging { opacity: 0.55; }
 .sv-item:hover:not(.selected) { border-color: color-mix(in oklch, var(--sv-primary) 35%, var(--sv-border)); }
 .sv-item.selected {
   border-color: color-mix(in oklch, var(--sv-primary) 55%, var(--sv-border));
@@ -175,6 +177,35 @@ svg { display: block; width: 16px; height: 16px; flex-shrink: 0; }
   background: var(--sv-muted);
   font-size: 12px;
 }
+.sv-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.sv-copy-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sv-muted-foreground);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.sv-copy-btn svg { width: 14px; height: 14px; }
+.sv-copy-btn:hover {
+  background: var(--sv-muted);
+  color: var(--sv-foreground);
+  border-color: var(--sv-border);
+}
+.sv-copy-btn:focus-visible { outline: 2px solid var(--sv-primary); outline-offset: 2px; }
+.sv-copy-btn.copied { color: var(--sv-primary); }
 .sv-insert-icon { color: var(--sv-primary); opacity: 0; flex-shrink: 0; }
 .sv-item.selected .sv-insert-icon { opacity: 1; }
 .sv-match { border-radius: 2px; color: var(--sv-foreground); background: color-mix(in oklch, var(--sv-primary) 22%, transparent); }

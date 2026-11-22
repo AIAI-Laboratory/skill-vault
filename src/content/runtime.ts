@@ -94,6 +94,12 @@ export class ContentRuntime {
     }
   };
 
+  /**
+   * Inserts a skill dropped directly onto the active AI chat composer and closes any open
+   * palette popup.
+   *
+   * @param event - Drop event captured at the document level.
+   */
   private onDocumentDrop = async (event: DragEvent) => {
     const composer = this.resolveComposer(event.target);
     const id = event.dataTransfer?.getData(SKILL_DRAG_TYPE);
@@ -101,6 +107,7 @@ export class ContentRuntime {
     event.preventDefault();
     this.currentComposer = composer;
     this.activeSlashRange = null;
+    if (this.palette.isPaletteOpen()) this.palette.close();
     try {
       const skill = await sendExtensionMessage('SKILL_GET', { id });
       if (!this.disposed && skill) await this.handleSkillSelected(skill);
@@ -149,13 +156,29 @@ export class ContentRuntime {
     }
   }
 
+  /**
+   * Schedules closing the palette after composer focus leaves, unless focus moved into the
+   * palette or the user is pressing/dragging a palette item.
+   *
+   * @param e - Focusout event captured at the document level.
+   */
   private onDocumentFocusOut = (e: FocusEvent) => {
     if (!this.currentComposer?.element.contains(e.target as Node)) return;
-    // Delay closing to allow click events inside palette to register
+    // Delay closing to allow click or drag events inside palette to register
     clearTimeout(this.blurTimer);
-    this.blurTimer = setTimeout(() => {
-      if (this.palette.isPaletteOpen() && !this.palette.hasFocus()) this.palette.close();
-    }, 250);
+    this.blurTimer = setTimeout(
+      /** Closes the palette if it is still open and not focused or being dragged. */
+      () => {
+        if (
+          this.palette.isPaletteOpen() &&
+          !this.palette.hasFocus() &&
+          !this.palette.isInteracting()
+        ) {
+          this.palette.close();
+        }
+      },
+      250
+    );
   };
 
   private handleSettingsChange = (
@@ -170,13 +193,27 @@ export class ContentRuntime {
     }
   };
 
+  /**
+   * Creates the content runtime and wires palette selection, search, copy, drag-drop, and close handlers.
+   */
   constructor() {
     this.palette = new PaletteUI({
+      /**
+       * Inserts the selected skill or fills a pending selection template.
+       *
+       * @param skill - The skill chosen by the user.
+       */
       onSelect: (skill) => {
         const fill = this.pendingFill;
         if (fill) void this.applyFill(skill, fill.text, fill.range);
         else void this.handleSkillSelected(skill);
       },
+      /**
+       * Searches stored skills for the active palette query.
+       *
+       * @param query - User-entered search text from the palette input.
+       * @returns Matching skill search results, or an empty array on messaging errors.
+       */
       onSearch: async (query) => {
         try {
           return await sendExtensionMessage('SKILL_SEARCH', { query });
@@ -186,6 +223,39 @@ export class ContentRuntime {
           return [];
         }
       },
+      /**
+       * Records skill usage after the user copies a skill prompt from the palette.
+       *
+       * @param skill - The skill copied to the clipboard.
+       */
+      onCopy: (skill) => {
+        sendExtensionMessage('SKILL_RECORD_USAGE', { id: skill.id }).catch(
+          /**
+           * Disposes the runtime when usage recording fails due to extension context invalidation.
+           *
+           * @param error - Rejection reason from the extension messaging layer.
+           * @returns True if the runtime was disposed due to context invalidation.
+           */
+          (error) => this.stopIfExtensionContextInvalidated(error)
+        );
+      },
+      /**
+       * Records skill usage after a skill is dragged from the palette and dropped into a text input.
+       *
+       * @param skill - The skill dropped onto a target input.
+       */
+      onDragDrop: (skill) => {
+        sendExtensionMessage('SKILL_RECORD_USAGE', { id: skill.id }).catch(
+          /**
+           * Disposes the runtime when usage recording fails due to extension context invalidation.
+           *
+           * @param error - Rejection reason from the extension messaging layer.
+           * @returns True if the runtime was disposed due to context invalidation.
+           */
+          (error) => this.stopIfExtensionContextInvalidated(error)
+        );
+      },
+      /** Clears transient slash-command and template-fill state when the palette closes. */
       onClose: () => {
         this.activeSlashRange = null;
         this.pendingFill = null;
