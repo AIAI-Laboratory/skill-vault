@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { compareVersions, validateReleaseVersion, versionParts } from './release-version.mjs';
+import { applyDevManifestNaming, isDevBuild } from './build.mjs';
 import { syncStore } from './sync-chrome-web-store.mjs';
 
 const temporary = [];
@@ -97,6 +98,54 @@ describe('release version integrity', () => {
     });
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('versions must match');
+  });
+  it('detects dev builds from CLI flag or environment variable and appends (dev) to manifest names' /**
+   * Verifies dev-build mode detection and idempotent `(dev)` manifest naming for unpacked builds.
+   */, () => {
+    expect(isDevBuild(['--dev'], {})).toBe(true);
+    expect(isDevBuild([], { BUILD_MODE: 'dev' })).toBe(true);
+    expect(isDevBuild([], {})).toBe(false);
+
+    const dir = fixture();
+    const manifestPath = path.join(dir, 'dist/manifest.json');
+    fs.writeFileSync(
+      manifestPath,
+      JSON.stringify({
+        manifest_version: 3,
+        name: 'Skill Vault',
+        version: '0.1.4',
+        action: { default_title: 'Skill Vault' },
+      })
+    );
+    applyDevManifestNaming(manifestPath);
+    applyDevManifestNaming(manifestPath);
+    const updated = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    expect(updated.name).toBe('Skill Vault (dev)');
+    expect(updated.action.default_title).toBe('Skill Vault (dev)');
+  });
+  it('detects dev builds from CLI flag or environment variable and appends (dev) to manifest names' /**
+   * Verifies dev-build mode detection and idempotent `(dev)` manifest naming for unpacked builds.
+   */, () => {
+    expect(isDevBuild(['--dev'], {})).toBe(true);
+    expect(isDevBuild([], { BUILD_MODE: 'dev' })).toBe(true);
+    expect(isDevBuild([], {})).toBe(false);
+
+    const dir = fixture();
+    const manifestPath = path.join(dir, 'dist/manifest.json');
+    fs.writeFileSync(
+      manifestPath,
+      JSON.stringify({
+        manifest_version: 3,
+        name: 'Skill Vault',
+        version: '0.1.4',
+        action: { default_title: 'Skill Vault' },
+      })
+    );
+    applyDevManifestNaming(manifestPath);
+    applyDevManifestNaming(manifestPath);
+    const updated = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    expect(updated.name).toBe('Skill Vault (dev)');
+    expect(updated.action.default_title).toBe('Skill Vault (dev)');
   });
 });
 
